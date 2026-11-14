@@ -31,7 +31,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class AutoUpdater {
-    public static final String GITHUB_REPO = "287tjb/AshportPass";
+    public static final String GITHUB_REPO = "rostoll-dev/AshportPass";
     private static final String LATEST_RELEASE_API = "https://api.github.com/repos/" + GITHUB_REPO + "/releases/latest";
 
     private final Activity activity;
