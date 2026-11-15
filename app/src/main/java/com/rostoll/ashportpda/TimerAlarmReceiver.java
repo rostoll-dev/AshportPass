@@ -13,16 +13,21 @@ import java.util.concurrent.Executors;
 
 public class TimerAlarmReceiver extends BroadcastReceiver {
     public static final String CHANNEL_ID = "ashport_timers_channel";
-    public static final String LIVE_CHANNEL_ID = "ashport_live_promoted_v2";
+    public static final String LIVE_CHANNEL_ID = "live_updates_travel";
     public static final String ACTION_TIMER_ALARM = "com.rostoll.ashportpda.ACTION_TIMER_ALARM";
     public static final String ACTION_BACKGROUND_HEARTBEAT = "com.rostoll.ashportpda.ACTION_BACKGROUND_HEARTBEAT";
+    public static final String ACTION_LIVE_PROGRESS_TICK = "com.rostoll.ashportpda.ACTION_LIVE_PROGRESS_TICK";
 
     @Override
     public void onReceive(Context context, Intent intent) {
         if (intent == null) return;
         String action = intent.getAction();
 
-        // 1. Reboot, App Update, or 5-Minute Background Heartbeat -> Silently poll API & update live notifications
+        if (ACTION_LIVE_PROGRESS_TICK.equals(action)) {
+            ApiTimerManager.refreshCachedLiveNotifications(context.getApplicationContext());
+            return;
+        }
+
         if (Intent.ACTION_BOOT_COMPLETED.equals(action)
                 || Intent.ACTION_MY_PACKAGE_REPLACED.equals(action)
                 || ACTION_BACKGROUND_HEARTBEAT.equals(action)) {
@@ -37,17 +42,14 @@ public class TimerAlarmReceiver extends BroadcastReceiver {
             return;
         }
 
-        // 2. Timer Reached 00:00:00 -> Always dismiss the Ongoing Live Chronometer notification first
-        int notifId = intent.getIntExtra("notif_id", 1001);
+        int notifId = intent.getIntExtra("notif_id", 108);
         boolean fireCompletionAlert = intent.getBooleanExtra("alert_enabled", true);
 
         NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
         if (nm == null) return;
 
-        // Cancel the paired ongoing live countdown notification (ID = notifId + 1000)
         nm.cancel(notifId + 1000);
 
-        // If user only wanted the live countdown bar and turned off the completion alert, stop here
         if (!fireCompletionAlert) return;
 
         String title = intent.getStringExtra("title");
@@ -80,7 +82,7 @@ public class TimerAlarmReceiver extends BroadcastReceiver {
                 ? new Notification.Builder(context, CHANNEL_ID)
                 : new Notification.Builder(context);
 
-        builder.setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
+        builder.setSmallIcon(ApiTimerManager.getIconResForTimer(notifId))
                 .setContentTitle(title)
                 .setContentText(message)
                 .setContentIntent(contentIntent)

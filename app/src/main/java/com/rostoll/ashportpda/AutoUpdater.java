@@ -78,7 +78,7 @@ public class AutoUpdater {
                 StringBuilder sb = new StringBuilder();
                 try (BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
                     String line;
-                    while ((line = br.readLine()) != null) sb.append(line);
+                    while ((line = br.readLine()) != null) sb.append(line).append("\n");
                 }
 
                 JSONObject release = new JSONObject(sb.toString());
@@ -90,7 +90,7 @@ public class AutoUpdater {
                 if (assets != null) {
                     for (int i = 0; i < assets.length(); i++) {
                         JSONObject asset = assets.optJSONObject(i);
-                        if (asset != null && asset.optString("name", "").endsWith(".apk")) {
+                        if (asset != null && asset.optString("name", "").toLowerCase().endsWith(".apk")) {
                             apkDownloadUrl = asset.optString("browser_download_url", null);
                             break;
                         }
@@ -119,8 +119,10 @@ public class AutoUpdater {
 
     private boolean isNewerVersion(String remoteVer, String localVer) {
         if (remoteVer.isEmpty() || remoteVer.equals(localVer)) return false;
-        String[] rParts = remoteVer.split("\\.");
-        String[] lParts = localVer.split("\\.");
+        String cleanRemote = remoteVer.split("-")[0];
+        String cleanLocal = localVer.split("-")[0];
+        String[] rParts = cleanRemote.split("\\.");
+        String[] lParts = cleanLocal.split("\\.");
         int len = Math.max(rParts.length, lParts.length);
         for (int i = 0; i < len; i++) {
             int r = i < rParts.length ? parseSafeInt(rParts[i]) : 0;
@@ -133,7 +135,8 @@ public class AutoUpdater {
 
     private int parseSafeInt(String s) {
         try {
-            return Integer.parseInt(s.replaceAll("[^0-9]", ""));
+            String base = s.split("-")[0].replaceAll("[^0-9]", "");
+            return base.isEmpty() ? 0 : Integer.parseInt(base);
         } catch (Exception e) {
             return 0;
         }
@@ -151,7 +154,7 @@ public class AutoUpdater {
     private void downloadAndInstallApk(String apkUrl, String version) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             if (!activity.getPackageManager().canRequestPackageInstalls()) {
-                Toast.makeText(activity, "Please allow 'Install unknown apps' for Ashport Pass first", Toast.LENGTH_LONG).show();
+                Toast.makeText(activity, "Allow 'Install unknown apps' for Ashport Pass, then tap Update again", Toast.LENGTH_LONG).show();
                 Intent permIntent = new Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
                         Uri.parse("package:" + activity.getPackageName()));
                 activity.startActivity(permIntent);
@@ -187,11 +190,29 @@ public class AutoUpdater {
         executor.execute(() -> {
             HttpURLConnection conn = null;
             try {
-                URL url = new URL(apkUrl);
-                conn = (HttpURLConnection) url.openConnection();
-                conn.setInstanceFollowRedirects(true);
-                conn.setConnectTimeout(15000);
-                conn.setReadTimeout(15000);
+                String currentUrl = apkUrl;
+                for (int redirects = 0; redirects < 5; redirects++) {
+                    conn = (HttpURLConnection) new URL(currentUrl).openConnection();
+                    conn.setInstanceFollowRedirects(true);
+                    conn.setRequestProperty("User-Agent", "AshportPass-Android-Updater");
+                    conn.setConnectTimeout(15000);
+                    conn.setReadTimeout(20000);
+
+                    int code = conn.getResponseCode();
+                    if (code == HttpURLConnection.HTTP_MOVED_PERM || code == HttpURLConnection.HTTP_MOVED_TEMP || code == 307 || code == 308) {
+                        String loc = conn.getHeaderField("Location");
+                        conn.disconnect();
+                        if (loc == null || loc.isEmpty()) break;
+                        currentUrl = loc;
+                    } else {
+                        break;
+                    }
+                }
+
+                int finalCode = conn.getResponseCode();
+                if (finalCode < 200 || finalCode >= 300) {
+                    throw new Exception("Server returned HTTP " + finalCode);
+                }
 
                 int totalBytes = conn.getContentLength();
                 File dir = activity.getExternalCacheDir() != null ? activity.getExternalCacheDir() : activity.getCacheDir();
@@ -202,19 +223,27 @@ public class AutoUpdater {
                      FileOutputStream fos = new FileOutputStream(outFile)) {
                     byte[] buffer = new byte[8192];
                     long downloaded = 0;
+                    int lastPct = -1;
                     int read;
                     while ((read = is.read(buffer)) != -1) {
                         fos.write(buffer, 0, read);
                         downloaded += read;
                         if (totalBytes > 0) {
                             final int pct = (int) ((downloaded * 100L) / totalBytes);
-                            activity.runOnUiThread(() -> {
-                                bar.setProgress(pct);
-                                statusTv.setText("Downloading AshportPass v" + version + "... " + pct + "%");
-                            });
+                            if (pct != lastPct) {
+                                lastPct = pct;
+                                activity.runOnUiThread(() -> {
+                                    bar.setProgress(pct);
+                                    statusTv.setText("Downloading AshportPass v" + version + "... " + pct + "%");
+                                });
+                            }
                         }
                     }
                     fos.flush();
+                }
+
+                if (!outFile.exists() || outFile.length() < 10240) {
+                    throw new Exception("Downloaded APK is incomplete (" + outFile.length() + " bytes)");
                 }
 
                 activity.runOnUiThread(() -> {

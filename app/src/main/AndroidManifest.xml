@@ -5,6 +5,8 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
@@ -52,6 +54,7 @@
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
                 <action android:name="com.rostoll.ashportpda.ACTION_TIMER_ALARM" />
                 <action android:name="com.rostoll.ashportpda.ACTION_BACKGROUND_HEARTBEAT" />
+                <action android:name="com.rostoll.ashportpda.ACTION_LIVE_PROGRESS_TICK" />
             </intent-filter>
         </receiver>
 
