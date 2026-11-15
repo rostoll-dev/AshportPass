@@ -12,7 +12,12 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
 import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.Path;
+import android.graphics.RectF;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
@@ -26,6 +31,7 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
+import android.widget.RemoteViews;
 import android.widget.ScrollView;
 import android.widget.Switch;
 import android.widget.TextView;
@@ -51,7 +57,6 @@ public class ApiTimerManager {
     private static final int HEARTBEAT_ALARM_ID = 9999;
     private static final long HEARTBEAT_INTERVAL_MS = 5L * 60L * 1000L; // 5 minutes
 
-    // Definition table: {id, alertKey, liveKey, defaultLiveBool, label}
     private static final String[][] TIMER_CONFIGS = {
             {"108", "notify_travel",  "live_travel",  "true",  "✈️ Flight / Travel"},
             {"109", "notify_status",  "live_status",  "true",  "🏥 Hospital / Jail"},
@@ -134,9 +139,6 @@ public class ApiTimerManager {
         }
     }
 
-    // =========================================================================
-    // 1. BUILD THE HOMEPAGE TIMERS DASHBOARD VIEW
-    // =========================================================================
     public View buildDashboardView() {
         dashboardContainer = new LinearLayout(activity);
         dashboardContainer.setOrientation(LinearLayout.VERTICAL);
@@ -232,9 +234,6 @@ public class ApiTimerManager {
         }
     }
 
-    // =========================================================================
-    // 2. SECURE API KEY INPUT MODAL
-    // =========================================================================
     public void showApiKeyModal() {
         AlertDialog.Builder builder = new AlertDialog.Builder(activity, android.R.style.Theme_DeviceDefault_Dialog_Alert);
 
@@ -325,9 +324,6 @@ public class ApiTimerManager {
                 .show();
     }
 
-    // =========================================================================
-    // 3. DUAL-TOGGLE NOTIFICATION MODAL (⏱ Live Bar + 🔔 End Alert)
-    // =========================================================================
     public void showNotificationSettingsModal() {
         if (Build.VERSION.SDK_INT >= 33) {
             if (activity.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
@@ -344,13 +340,12 @@ public class ApiTimerManager {
         scroll.addView(layout);
 
         TextView legend = new TextView(activity);
-        legend.setText("Choose per timer:\n• ⏱ Live: Pins an ongoing live countdown bar with ETA in your status bar while active.\n• 🔔 Alert: Vibrates & notifies you when the timer hits 00:00.");
+        legend.setText("Choose per timer:\n• ⏱ Live: Pins an expanded live countdown card with visual progress tracker in your status bar.\n• 🔔 Alert: Vibrates & notifies you when the timer hits 00:00.");
         legend.setTextColor(Color.parseColor("#90a4ae"));
         legend.setTextSize(12f);
         legend.setPadding(0, 0, 0, dp(10));
         layout.addView(legend);
 
-        // Header Row
         LinearLayout headerRow = new LinearLayout(activity);
         headerRow.setOrientation(LinearLayout.HORIZONTAL);
         headerRow.setPadding(0, dp(4), 0, dp(6));
@@ -423,15 +418,12 @@ public class ApiTimerManager {
                     if (lastTimersJson != null) {
                         scheduleAlarmsStatic(activity, prefs, lastTimersJson, serverTimeOffsetMs);
                         scheduleBackgroundHeartbeat(activity);
-                        Toast.makeText(activity, "Live bars & alarms updated!", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(activity, "Live cards & alarms updated!", Toast.LENGTH_SHORT).show();
                     }
                 })
                 .show();
     }
 
-    // =========================================================================
-    // 4. FOREGROUND & HEADLESS BACKGROUND NETWORK SYNC
-    // =========================================================================
     public void syncTimersNow(boolean showToast) {
         final String apiKey = keyStore.getApiKey();
         if (apiKey.isEmpty()) {
@@ -468,7 +460,7 @@ public class ApiTimerManager {
                     updateHeaderStatus();
                     renderTimersContent();
                     if (showToast) {
-                        Toast.makeText(activity, "Ashport timers & live bars synced!", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(activity, "Ashport timers & live cards synced!", Toast.LENGTH_SHORT).show();
                     }
                 });
             } catch (Exception e) {
@@ -558,9 +550,6 @@ public class ApiTimerManager {
         throw lastErr != null ? lastErr : new Exception("Failed to reach Ashport API");
     }
 
-    // =========================================================================
-    // 5. RENDER LIVE COUNTDOWNS ON THE HUB SCREEN
-    // =========================================================================
     private void renderTimersContent() {
         if (liveContentBox == null) return;
         liveContentBox.removeAllViews();
@@ -736,7 +725,7 @@ public class ApiTimerManager {
     }
 
     // =========================================================================
-    // 6. SCHEDULE EXACT OS ALARMS & ONGOING LIVE CHRONOMETER NOTIFICATIONS
+    // 6. SCHEDULE EXACT OS ALARMS & TORN-PDA-STYLE LIVE CARDS
     // =========================================================================
     public static void scheduleAlarmsStatic(Context context, SharedPreferences prefs, JSONObject t, long serverOffsetMs) {
         long nowServer = System.currentTimeMillis() + serverOffsetMs;
@@ -745,35 +734,39 @@ public class ApiTimerManager {
         JSONObject bars = t.optJSONObject("bars");
         if (bars != null) {
             JSONObject eBar = bars.optJSONObject("energy");
+            int eVal = eBar != null ? eBar.optInt("value", 0) : 0;
+            int eMax = eBar != null ? eBar.optInt("max", 100) : 100;
             handleTimerEntryStatic(context, prefs, 101, "notify_energy", "live_energy", false,
-                    eBar != null ? eBar.optLong("fullAt", 0L) : 0L, nowServer,
-                    eBar != null ? eBar.optInt("value", 0) : 0, eBar != null ? eBar.optInt("max", 100) : 100,
-                    "⚡ Regenerating Energy",
-                    "Energy (" + (eBar != null ? eBar.optInt("value", 0) : 0) + "/" + (eBar != null ? eBar.optInt("max", 100) : 100) + ")",
+                    eBar != null ? eBar.optLong("fullAt", 0L) : 0L, nowServer, eVal, eMax,
+                    "Regenerating Energy", "Currently at " + eVal + " / " + eMax + " Energy",
+                    "⚡", "MAX",
                     "⚡ Energy Full", "Your Ashport Energy bar has reached maximum capacity!");
 
             JSONObject nBar = bars.optJSONObject("nerve");
+            int nVal = nBar != null ? nBar.optInt("value", 0) : 0;
+            int nMax = nBar != null ? nBar.optInt("max", 100) : 100;
             handleTimerEntryStatic(context, prefs, 102, "notify_nerve", "live_nerve", false,
-                    nBar != null ? nBar.optLong("fullAt", 0L) : 0L, nowServer,
-                    nBar != null ? nBar.optInt("value", 0) : 0, nBar != null ? nBar.optInt("max", 100) : 100,
-                    "🔥 Regenerating Nerve",
-                    "Nerve (" + (nBar != null ? nBar.optInt("value", 0) : 0) + "/" + (nBar != null ? nBar.optInt("max", 100) : 100) + ")",
+                    nBar != null ? nBar.optLong("fullAt", 0L) : 0L, nowServer, nVal, nMax,
+                    "Regenerating Nerve", "Currently at " + nVal + " / " + nMax + " Nerve",
+                    "🔥", "MAX",
                     "🔥 Nerve Full", "Your Ashport Nerve bar is full and ready for crimes!");
 
             JSONObject hBar = bars.optJSONObject("health");
+            int hVal = hBar != null ? hBar.optInt("value", 0) : 0;
+            int hMax = hBar != null ? hBar.optInt("max", 100) : 100;
             handleTimerEntryStatic(context, prefs, 103, "notify_health", "live_health", false,
-                    hBar != null ? hBar.optLong("fullAt", 0L) : 0L, nowServer,
-                    hBar != null ? hBar.optInt("value", 0) : 0, hBar != null ? hBar.optInt("max", 100) : 100,
-                    "❤️ Healing Health",
-                    "Health (" + (hBar != null ? hBar.optInt("value", 0) : 0) + "/" + (hBar != null ? hBar.optInt("max", 100) : 100) + ")",
+                    hBar != null ? hBar.optLong("fullAt", 0L) : 0L, nowServer, hVal, hMax,
+                    "Healing Health", "Currently at " + hVal + " / " + hMax + " HP",
+                    "❤️", "100%",
                     "❤️ Health Full", "Your Health bar is back to 100%.");
 
             JSONObject mBar = bars.optJSONObject("mood");
+            int mVal = mBar != null ? mBar.optInt("value", 0) : 0;
+            int mMax = mBar != null ? mBar.optInt("max", 100) : 100;
             handleTimerEntryStatic(context, prefs, 104, "notify_mood", "live_mood", false,
-                    mBar != null ? mBar.optLong("fullAt", 0L) : 0L, nowServer,
-                    mBar != null ? mBar.optInt("value", 0) : 0, mBar != null ? mBar.optInt("max", 100) : 100,
-                    "😊 Recovering Mood",
-                    "Mood (" + (mBar != null ? mBar.optInt("value", 0) : 0) + "/" + (mBar != null ? mBar.optInt("max", 100) : 100) + ")",
+                    mBar != null ? mBar.optLong("fullAt", 0L) : 0L, nowServer, mVal, mMax,
+                    "Recovering Mood", "Currently at " + mVal + " / " + mMax + " Mood",
+                    "😊", "100%",
                     "😊 Mood Full", "Your Mood bar has fully regenerated.");
         }
 
@@ -782,31 +775,38 @@ public class ApiTimerManager {
         if (cds != null) {
             handleTimerEntryStatic(context, prefs, 105, "notify_drug", "live_drug", true,
                     cds.optLong("drug", 0L), nowServer, -1, -1,
-                    "💊 Drug Cooldown Active", "Waiting for drug cooldown to clear",
+                    "Drug Cooldown Active", "Waiting for substance effects to clear.",
+                    "💊", "OK",
                     "💊 Drug Cooldown Ready", "Your drug cooldown has ended.");
 
             handleTimerEntryStatic(context, prefs, 106, "notify_booster", "live_booster", false,
                     cds.optLong("booster", 0L), nowServer, -1, -1,
-                    "🚀 Booster Cooldown Active", "Waiting for booster cooldown to clear",
+                    "Booster Cooldown Active", "Waiting for booster timer to reset.",
+                    "🚀", "OK",
                     "🚀 Booster Cooldown Ready", "Your booster cooldown has ended.");
 
             handleTimerEntryStatic(context, prefs, 107, "notify_medical", "live_medical", false,
                     cds.optLong("medical", 0L), nowServer, -1, -1,
-                    "🩹 Medical Cooldown Active", "Waiting for medical cooldown to clear",
+                    "Medical Cooldown Active", "Medical supplies on cooldown.",
+                    "🩹", "OK",
                     "🩹 Medical Cooldown Ready", "Your medical cooldown has cleared.");
         }
 
-        // 3. Travel / Flight
+        // 3. Travel / Flight (Clean title without emoji + atmospheric flight flavor text + destination code badge)
         JSONObject travel = t.optJSONObject("travel");
         long landsAt = travel != null ? travel.optLong("landsAt", 0L) : 0L;
         String dest = travel != null ? travel.optString("name", travel.optString("dest", "Destination")) : "Destination";
         boolean returning = travel != null && "home".equalsIgnoreCase(travel.optString("dir"));
-        String flightLiveTitle = returning ? "✈️ Returning to Ashport" : "✈️ Traveling to " + dest;
-        String flightLiveSub = returning ? "Inbound flight from " + dest : "Outbound flight • En route to " + dest;
+        String flightLiveTitle = returning ? "Returning to Ashport" : "Traveling to " + dest;
+        String flightLiveSub = returning
+                ? "Inbound flight from " + dest + ". Smooth skies ahead."
+                : "Wheels up, en route to " + dest + ". Nothing to report.";
+        String endBadge = returning ? "ASH" : makeDestCode(dest);
 
         handleTimerEntryStatic(context, prefs, 108, "notify_travel", "live_travel", true,
                 landsAt, nowServer, -1, -1,
                 flightLiveTitle, flightLiveSub,
+                "✈️", endBadge,
                 "✈️ Flight Landed", "You have landed in " + (returning ? "Ashport" : dest) + "!");
 
         // 4. Hospital / Jail Release
@@ -819,22 +819,35 @@ public class ApiTimerManager {
 
         handleTimerEntryStatic(context, prefs, 109, "notify_status", "live_status", true,
                 statusUntil, nowServer, -1, -1,
-                isJail ? "⛓ Currently in Jail" : "🏥 Currently Hospitalized",
-                !statusReason.isEmpty() ? statusReason : (isJail ? "Serving sentence" : "Recovering in hospital"),
+                isJail ? "Currently in Jail" : "Currently Hospitalized",
+                !statusReason.isEmpty() ? statusReason : (isJail ? "Serving sentence. Counting down release." : "Resting in medical ward until discharge."),
+                isJail ? "⛓" : "🏥", "OUT",
                 isJail ? "⛓ Released from Jail!" : "🏥 Released from Hospital!",
                 "You are out and ready for action in Ashport.");
 
         // 5. Education Course
         handleTimerEntryStatic(context, prefs, 110, "notify_course", "live_course", true,
                 t.optLong("courseEndsAt", 0L), nowServer, -1, -1,
-                "🎓 Education Course in Progress", "Studying current course",
+                "Education Course in Progress", "Studying current curriculum module.",
+                "🎓", "GRAD",
                 "🎓 Course Completed", "Your Ashport education course has finished!");
 
         // 6. Bank Investment
         handleTimerEntryStatic(context, prefs, 111, "notify_bank", "live_bank", false,
                 t.optLong("bankMaturesAt", 0L), nowServer, -1, -1,
-                "🏦 Bank Investment Active", "Accruing interest until maturity",
+                "Bank Investment Active", "Accruing compound interest until maturity.",
+                "🏦", "$$$",
                 "🏦 Bank Deposit Matured", "Your Ashport bank investment is ready to collect!");
+    }
+
+    private static String makeDestCode(String dest) {
+        if (dest == null || dest.trim().isEmpty()) return "DST";
+        String clean = dest.trim().toUpperCase(Locale.US);
+        String[] words = clean.split("\\s+");
+        if (words.length >= 2) {
+            return "" + words[0].charAt(0) + words[1].charAt(0);
+        }
+        return clean.length() >= 3 ? clean.substring(0, 3) : clean;
     }
 
     private static void handleTimerEntryStatic(Context context, SharedPreferences prefs, int notifId,
@@ -842,6 +855,7 @@ public class ApiTimerManager {
                                                long targetServerMs, long nowServerMs,
                                                int barVal, int barMax,
                                                String liveTitle, String liveSubtitle,
+                                               String trackerSymbol, String endBadgeText,
                                                String finishTitle, String finishMessage) {
         AlarmManager am = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
         NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
@@ -864,7 +878,6 @@ public class ApiTimerManager {
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
         );
 
-        // If timer is not active (already finished or 0), cancel both alarm and ongoing live notification
         if (targetServerMs <= nowServerMs) {
             am.cancel(pi);
             nm.cancel(notifId + 1000);
@@ -878,7 +891,6 @@ public class ApiTimerManager {
         long delayMs = targetServerMs - nowServerMs;
         long triggerLocalMs = System.currentTimeMillis() + delayMs;
 
-        // Track start timestamp of this specific target so we can compute a smooth 0-100% progress bar
         long prevTarget = prefs.getLong("scheduled_target_" + notifId, 0L);
         long startServerMs = prefs.getLong("start_server_ms_" + notifId, nowServerMs);
         if (Math.abs(targetServerMs - prevTarget) > 5000L || startServerMs >= targetServerMs) {
@@ -889,7 +901,6 @@ public class ApiTimerManager {
                     .apply();
         }
 
-        // Schedule exact alarm at 00:00:00 if either Alert OR Live Bar is enabled (so Live Bar auto-clears at 00:00)
         if (alertEnabled || liveEnabled) {
             try {
                 am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerLocalMs, pi);
@@ -900,7 +911,6 @@ public class ApiTimerManager {
             am.cancel(pi);
         }
 
-        // Post or remove the Ongoing Live Chronometer Notification (ID = notifId + 1000)
         if (liveEnabled) {
             int progressPct;
             if (barMax > 0 && barVal >= 0) {
@@ -910,22 +920,29 @@ public class ApiTimerManager {
                 long elapsed = Math.max(0L, nowServerMs - startServerMs);
                 progressPct = (int) Math.min(100L, (elapsed * 100L) / totalDur);
             }
-            postOngoingChronometerNotification(context, nm, notifId + 1000, triggerLocalMs, progressPct, liveTitle, liveSubtitle);
+            postOngoingChronometerNotification(context, nm, notifId, notifId + 1000,
+                    triggerLocalMs, progressPct, liveTitle, liveSubtitle, trackerSymbol, endBadgeText);
         } else {
             nm.cancel(notifId + 1000);
         }
     }
 
     private static void postOngoingChronometerNotification(Context context, NotificationManager nm,
-                                                           int liveNotifId, long triggerLocalMs,
-                                                           int progressPct, String title, String subtitle) {
+                                                           int baseTimerId, int liveNotifId, long triggerLocalMs,
+                                                           int progressPct, String title, String subtitle,
+                                                           String trackerSymbol, String endBadgeText) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            // Clean up old low-importance channel so Android promotes the card
+            nm.deleteNotificationChannel("ashport_live_chronometer_channel");
+
             NotificationChannel liveChannel = new NotificationChannel(
                     TimerAlarmReceiver.LIVE_CHANNEL_ID,
-                    "Ashport Live Countdowns",
-                    NotificationManager.IMPORTANCE_LOW
+                    "Ashport Live Activity Cards",
+                    NotificationManager.IMPORTANCE_DEFAULT
             );
-            liveChannel.setDescription("Silent ongoing countdown bars in status bar (Travel, Hospital, Cooldowns)");
+            liveChannel.setDescription("Promoted live countdown cards with visual progress tracker");
+            liveChannel.setSound(null, null);
+            liveChannel.enableVibration(false);
             liveChannel.setShowBadge(false);
             liveChannel.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
             nm.createNotificationChannel(liveChannel);
@@ -942,32 +959,161 @@ public class ApiTimerManager {
 
         String etaStr = new SimpleDateFormat("HH:mm", Locale.getDefault()).format(new Date(triggerLocalMs));
 
+        // Render the custom Torn-PDA-style visual progress bitmap
+        boolean isFlight = (baseTimerId == 108);
+        Bitmap trackBitmap = renderTornStyleTrackBitmap(progressPct, isFlight, trackerSymbol, endBadgeText);
+
+        RemoteViews rv = new RemoteViews(context.getPackageName(), R.layout.notif_live_timer);
+        rv.setTextViewText(R.id.notif_title, title);
+        rv.setTextViewText(R.id.notif_subtitle, subtitle);
+        rv.setImageViewBitmap(R.id.notif_progress_img, trackBitmap);
+
         Notification.Builder builder = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
                 ? new Notification.Builder(context, TimerAlarmReceiver.LIVE_CHANNEL_ID)
                 : new Notification.Builder(context);
 
-        builder.setSmallIcon(android.R.drawable.ic_menu_recent_history)
+        int smallIconRes = isFlight
+                ? android.R.drawable.ic_menu_send
+                : (baseTimerId == 109 ? android.R.drawable.ic_menu_myplaces : android.R.drawable.ic_popup_sync);
+
+        builder.setSmallIcon(smallIconRes)
                 .setContentTitle(title)
-                .setContentText(subtitle + " • Ends at " + etaStr)
+                .setContentText(subtitle)
                 .setSubText("ETA " + etaStr)
                 .setWhen(triggerLocalMs)
                 .setShowWhen(true)
                 .setUsesChronometer(true)
                 .setOngoing(true)
                 .setOnlyAlertOnce(true)
-                .setProgress(100, progressPct, false)
                 .setContentIntent(contentIntent);
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
             builder.setChronometerCountDown(true);
+            builder.setStyle(new Notification.DecoratedCustomViewStyle());
+            builder.setCustomContentView(rv);
+            builder.setCustomBigContentView(rv);
         }
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             builder.setCategory(Notification.CATEGORY_PROGRESS)
                    .setVisibility(Notification.VISIBILITY_PUBLIC)
-                   .setColor(Color.parseColor("#f2851d"));
+                   .setColor(Color.parseColor("#4a6583")); // Torn PDA slate-blue accent circle
         }
 
         nm.notify(liveNotifId, builder.build());
+    }
+
+    // Draws the origin circle ('A'), thick filled blue bar, thin remaining line, moving airplane/tracker, and destination badge
+    private static Bitmap renderTornStyleTrackBitmap(int progressPct, boolean isFlight, String trackerSymbol, String endBadgeText) {
+        int width = 900;
+        int height = 96;
+        Bitmap bmp = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+        Canvas c = new Canvas(bmp);
+
+        Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+        float cy = height / 2f;
+        float startX = 44f;
+        float endX = width - 44f;
+        float trackLeft = startX + 38f;
+        float trackRight = endX - 38f;
+        float clampedPct = Math.max(0, Math.min(100, progressPct)) / 100f;
+        float curX = trackLeft + (trackRight - trackLeft) * clampedPct;
+
+        // 1. Origin Badge Circle ('A' for Ashport, styled like Torn's 'T' badge)
+        p.setStyle(Paint.Style.FILL);
+        p.setColor(Color.parseColor("#cfd8dc"));
+        c.drawCircle(startX, cy, 28f, p);
+        p.setStyle(Paint.Style.STROKE);
+        p.setStrokeWidth(3f);
+        p.setColor(Color.parseColor("#90a4ae"));
+        c.drawCircle(startX, cy, 28f, p);
+
+        p.setStyle(Paint.Style.FILL);
+        p.setColor(Color.parseColor("#102027"));
+        p.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD));
+        p.setTextSize(34f);
+        p.setTextAlign(Paint.Align.CENTER);
+        Paint.FontMetrics fm = p.getFontMetrics();
+        float textOffsetY = -(fm.ascent + fm.descent) / 2f;
+        c.drawText("A", startX, cy + textOffsetY, p);
+
+        // 2. Remaining Track Line (Thin slate-grey line to destination)
+        p.setStyle(Paint.Style.STROKE);
+        p.setStrokeWidth(5f);
+        p.setStrokeCap(Paint.Cap.ROUND);
+        p.setColor(Color.parseColor("#8ea1b2"));
+        c.drawLine(curX, cy, trackRight, cy, p);
+
+        // 3. Completed Progress Segment (Thick deep-blue capsule bar from origin to current position)
+        if (curX > trackLeft + 2f) {
+            p.setStyle(Paint.Style.STROKE);
+            p.setStrokeWidth(15f);
+            p.setStrokeCap(Paint.Cap.ROUND);
+            p.setColor(Color.parseColor("#39557a"));
+            c.drawLine(trackLeft, cy, curX, cy, p);
+        }
+
+        // 4. Destination Badge Circle on the Right
+        p.setStyle(Paint.Style.FILL);
+        p.setColor(isFlight ? Color.parseColor("#c62828") : Color.parseColor("#37474f"));
+        c.drawCircle(endX, cy, 28f, p);
+        p.setStyle(Paint.Style.STROKE);
+        p.setStrokeWidth(3f);
+        p.setColor(Color.parseColor("#eceff1"));
+        c.drawCircle(endX, cy, 28f, p);
+
+        p.setStyle(Paint.Style.FILL);
+        p.setColor(Color.WHITE);
+        p.setTextSize(19f);
+        p.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD));
+        Paint.FontMetrics fmEnd = p.getFontMetrics();
+        c.drawText(endBadgeText, endX, cy - (fmEnd.ascent + fmEnd.descent) / 2f, p);
+
+        // 5. Moving Tracker Icon at Current Progress Point (Blue Airplane silhouette for flights)
+        if (isFlight) {
+            drawBlueAirplane(c, curX, cy);
+        } else {
+            p.setStyle(Paint.Style.FILL);
+            p.setColor(Color.parseColor("#039be5"));
+            c.drawCircle(curX, cy, 22f, p);
+            p.setTextSize(26f);
+            Paint.FontMetrics fmTr = p.getFontMetrics();
+            c.drawText(trackerSymbol, curX, cy - (fmTr.ascent + fmTr.descent) / 2f, p);
+        }
+
+        return bmp;
+    }
+
+    private static void drawBlueAirplane(Canvas c, float cx, float cy) {
+        Paint ap = new Paint(Paint.ANTI_ALIAS_FLAG);
+        ap.setStyle(Paint.Style.FILL);
+        ap.setColor(Color.parseColor("#0095ff"));
+
+        // Fuselage
+        RectF body = new RectF(cx - 28f, cy - 6f, cx + 28f, cy + 6f);
+        c.drawRoundRect(body, 6f, 6f, ap);
+
+        // Swept Main Wings
+        Path wings = new Path();
+        wings.moveTo(cx + 6f, cy);
+        wings.lineTo(cx - 10f, cy - 34f);
+        wings.lineTo(cx - 18f, cy - 34f);
+        wings.lineTo(cx - 6f, cy);
+        wings.lineTo(cx - 18f, cy + 34f);
+        wings.lineTo(cx - 10f, cy + 34f);
+        wings.close();
+        c.drawPath(wings, ap);
+
+        // Tail Fins
+        Path tail = new Path();
+        tail.moveTo(cx - 18f, cy);
+        tail.lineTo(cx - 28f, cy - 18f);
+        tail.lineTo(cx - 33f, cy - 18f);
+        tail.lineTo(cx - 25f, cy);
+        tail.lineTo(cx - 33f, cy + 18f);
+        tail.lineTo(cx - 28f, cy + 18f);
+        tail.close();
+        c.drawPath(tail, ap);
     }
 
     public static void scheduleBackgroundHeartbeat(Context context) {

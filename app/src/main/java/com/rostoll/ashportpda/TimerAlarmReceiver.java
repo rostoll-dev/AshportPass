@@ -13,7 +13,7 @@ import java.util.concurrent.Executors;
 
 public class TimerAlarmReceiver extends BroadcastReceiver {
     public static final String CHANNEL_ID = "ashport_timers_channel";
-    public static final String LIVE_CHANNEL_ID = "ashport_live_chronometer_channel";
+    public static final String LIVE_CHANNEL_ID = "ashport_live_promoted_v2";
     public static final String ACTION_TIMER_ALARM = "com.rostoll.ashportpda.ACTION_TIMER_ALARM";
     public static final String ACTION_BACKGROUND_HEARTBEAT = "com.rostoll.ashportpda.ACTION_BACKGROUND_HEARTBEAT";
 
