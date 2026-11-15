@@ -19,6 +19,7 @@ import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
+import android.os.PowerManager;
 import android.text.Editable;
 import android.text.TextUtils;
 import android.text.TextWatcher;
@@ -188,7 +189,10 @@ public class MainActivity extends Activity {
         boolean enabled = isAshportLinkHandlingEnabled();
         updateLinkStatusCardUI(enabled);
 
-        if (enabled) return;
+        if (enabled) {
+            promptBatteryOptimizationExemption();
+            return;
+        }
 
         SharedPreferences prefs = getSharedPreferences("AshportPDA_AppPrefs", Context.MODE_PRIVATE);
         boolean alreadyPrompted = prefs.getBoolean("prompted_link_handling", false);
@@ -202,6 +206,21 @@ public class MainActivity extends Activity {
                 .setPositiveButton("Open Link Settings", (d, w) -> openSystemLinkSettings())
                 .setNegativeButton("Later", null)
                 .show();
+    }
+
+    @SuppressLint("BatteryLife")
+    private void promptBatteryOptimizationExemption() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            try {
+                PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
+                SharedPreferences prefs = getSharedPreferences("AshportPDA_AppPrefs", Context.MODE_PRIVATE);
+                if (pm != null && !pm.isIgnoringBatteryOptimizations(getPackageName()) && !prefs.getBoolean("prompted_battery_opt", false)) {
+                    prefs.edit().putBoolean("prompted_battery_opt", true).apply();
+                    Intent intent = new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:" + getPackageName()));
+                    startActivity(intent);
+                }
+            } catch (Exception ignored) {}
+        }
     }
 
     private void openSystemLinkSettings() {
@@ -795,6 +814,7 @@ public class MainActivity extends Activity {
             public void onPageFinished(WebView view, String loadedUrl) {
                 super.onPageFinished(view, loadedUrl);
                 tab.url = loadedUrl;
+                if (apiTimerManager != null) apiTimerManager.syncIfNeededOnActivity(45000L);
                 updateBarsUI();
             }
         });
@@ -972,6 +992,7 @@ public class MainActivity extends Activity {
 
     private void showBrowser() {
         apiTimerManager.stopTicker();
+        apiTimerManager.syncIfNeededOnActivity(10000L);
         hubView.setVisibility(View.GONE);
         browserView.setVisibility(View.VISIBLE);
         updateBarsUI();
@@ -1032,6 +1053,7 @@ public class MainActivity extends Activity {
     protected void onPause() {
         super.onPause();
         apiTimerManager.stopTicker();
+        apiTimerManager.syncIfNeededOnActivity(10000L);
         CookieManager.getInstance().flush();
     }
 

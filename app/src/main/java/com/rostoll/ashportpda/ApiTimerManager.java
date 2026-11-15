@@ -42,7 +42,9 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class ApiTimerManager {
-    private static final String PREFS_CACHE = "AshportPDA_TimersCache";
+    public static final String PREFS_CACHE = "AshportPDA_TimersCache";
+    private static final int HEARTBEAT_ALARM_ID = 9999;
+    private static final long HEARTBEAT_INTERVAL_MS = 5L * 60L * 1000L; // 15 minutes
 
     private final Activity activity;
     private final SecureKeyStore keyStore;
@@ -56,7 +58,6 @@ public class ApiTimerManager {
     private long lastFetchLocalMs = 0L;
     private boolean isFetching = false;
 
-    // Dashboard UI references
     private LinearLayout dashboardContainer;
     private TextView keyStatusBadge;
     private TextView syncStatusText;
@@ -77,6 +78,9 @@ public class ApiTimerManager {
         this.keyStore = new SecureKeyStore(activity);
         this.prefs = activity.getSharedPreferences(PREFS_CACHE, Context.MODE_PRIVATE);
         loadCachedData();
+        if (keyStore.hasApiKey()) {
+            scheduleBackgroundHeartbeat(activity);
+        }
     }
 
     private void loadCachedData() {
@@ -84,22 +88,34 @@ public class ApiTimerManager {
             String cachedTimers = prefs.getString("cached_timers", null);
             String cachedKey = prefs.getString("cached_key_info", null);
             serverTimeOffsetMs = prefs.getLong("server_offset_ms", 0L);
+            lastFetchLocalMs = prefs.getLong("last_fetch_local_ms", 0L);
             if (cachedTimers != null) lastTimersJson = new JSONObject(cachedTimers);
             if (cachedKey != null) lastKeyInfoJson = new JSONObject(cachedKey);
         } catch (Exception ignored) {}
     }
 
     public void startTicker() {
+        loadCachedData();
         tickHandler.removeCallbacks(uiTicker);
         tickHandler.post(uiTicker);
-        // Auto-sync if key exists and last fetch was over 30 seconds ago
-        if (keyStore.hasApiKey() && (System.currentTimeMillis() - lastFetchLocalMs > 30000L)) {
+        if (keyStore.hasApiKey() && (System.currentTimeMillis() - lastFetchLocalMs > 20000L)) {
             syncTimersNow(false);
         }
     }
 
     public void stopTicker() {
         tickHandler.removeCallbacks(uiTicker);
+    }
+
+    /**
+     * Called automatically when WebView pages finish loading or when the app is minimized.
+     * Debounced to avoid hitting rate limits while clicking rapidly.
+     */
+    public void syncIfNeededOnActivity(long minIntervalMs) {
+        if (!keyStore.hasApiKey() || isFetching) return;
+        if (System.currentTimeMillis() - lastFetchLocalMs >= minIntervalMs) {
+            syncTimersNow(false);
+        }
     }
 
     // =========================================================================
@@ -109,7 +125,6 @@ public class ApiTimerManager {
         dashboardContainer = new LinearLayout(activity);
         dashboardContainer.setOrientation(LinearLayout.VERTICAL);
 
-        // --- Top Control Card: API Key Vault + Sync + Notification Settings ---
         LinearLayout controlCard = new LinearLayout(activity);
         controlCard.setOrientation(LinearLayout.VERTICAL);
         int pad = dp(14);
@@ -143,7 +158,6 @@ public class ApiTimerManager {
         syncStatusText.setPadding(0, dp(4), 0, dp(10));
         controlCard.addView(syncStatusText);
 
-        // Action Buttons Row: [ 🔑 API Key ] [ 🔄 Sync ] [ 🔔 Alerts ]
         LinearLayout btnRow = new LinearLayout(activity);
         btnRow.setOrientation(LinearLayout.HORIZONTAL);
 
@@ -170,7 +184,6 @@ public class ApiTimerManager {
 
         dashboardContainer.addView(controlCard);
 
-        // --- Dynamic Live Timers Container ---
         liveContentBox = new LinearLayout(activity);
         liveContentBox.setOrientation(LinearLayout.VERTICAL);
         dashboardContainer.addView(liveContentBox);
@@ -188,13 +201,13 @@ public class ApiTimerManager {
             keyStatusBadge.setBackground(makePillDrawable("#3e2723"));
             syncStatusText.setText("Tap '🔑 API Key' to securely store your Ashport key (needs 'profile' scope).");
         } else {
-            String playerInfo = "Key Stored";
+            String playerInfo = "Key Stored • Exact Alarms Active";
             if (lastKeyInfoJson != null) {
                 int pid = lastKeyInfoJson.optInt("playerId", 0);
                 String kName = lastKeyInfoJson.optString("name", "Key");
                 JSONObject rl = lastKeyInfoJson.optJSONObject("rateLimit");
                 int rem = rl != null ? rl.optInt("remaining", 60) : 60;
-                playerInfo = kName + (pid > 0 ? " [#" + pid + "]" : "") + " • " + rem + "/60 req left";
+                playerInfo = kName + (pid > 0 ? " [#" + pid + "]" : "") + " • " + rem + "/60 req • Bg Sync ON";
             }
             keyStatusBadge.setText("ENCRYPTED");
             keyStatusBadge.setTextColor(Color.parseColor("#69f0ae"));
@@ -272,6 +285,7 @@ public class ApiTimerManager {
                         lastTimersJson = null;
                         lastKeyInfoJson = null;
                         prefs.edit().clear().apply();
+                        cancelBackgroundHeartbeat(activity);
                         updateHeaderStatus();
                         renderTimersContent();
                         Toast.makeText(activity, "API Key cleared", Toast.LENGTH_SHORT).show();
@@ -286,6 +300,7 @@ public class ApiTimerManager {
                     lastTimersJson = null;
                     lastKeyInfoJson = null;
                     prefs.edit().clear().apply();
+                    cancelBackgroundHeartbeat(activity);
                     updateHeaderStatus();
                     renderTimersContent();
                     Toast.makeText(activity, "API Key removed from vault", Toast.LENGTH_SHORT).show();
@@ -298,7 +313,6 @@ public class ApiTimerManager {
     // 3. NOTIFICATION TOGGLES MODAL
     // =========================================================================
     public void showNotificationSettingsModal() {
-        // Request Android 13+ notification permission if not granted yet
         if (Build.VERSION.SDK_INT >= 33) {
             if (activity.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                 activity.requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 2001);
@@ -344,15 +358,16 @@ public class ApiTimerManager {
                 .setView(scroll)
                 .setPositiveButton("Apply & Reschedule", (d, w) -> {
                     if (lastTimersJson != null) {
-                        scheduleAlarmsFromTimers(lastTimersJson);
-                        Toast.makeText(activity, "Alarms updated!", Toast.LENGTH_SHORT).show();
+                        scheduleAlarmsStatic(activity, prefs, lastTimersJson, serverTimeOffsetMs);
+                        scheduleBackgroundHeartbeat(activity);
+                        Toast.makeText(activity, "Exact alarms updated!", Toast.LENGTH_SHORT).show();
                     }
                 })
                 .show();
     }
 
     // =========================================================================
-    // 4. NETWORK FETCH (/v1/key and /v1/me/timers)
+    // 4. FOREGROUND & HEADLESS BACKGROUND NETWORK SYNC
     // =========================================================================
     public void syncTimersNow(boolean showToast) {
         final String apiKey = keyStore.getApiKey();
@@ -366,8 +381,8 @@ public class ApiTimerManager {
 
         executor.execute(() -> {
             try {
-                JSONObject keyResp = fetchEndpoint("/v1/key", apiKey);
-                JSONObject timersResp = fetchEndpoint("/v1/me/timers", apiKey);
+                JSONObject keyResp = fetchEndpointStatic("/v1/key", apiKey);
+                JSONObject timersResp = fetchEndpointStatic("/v1/me/timers", apiKey);
 
                 long serverNow = timersResp.optLong("now", System.currentTimeMillis());
                 serverTimeOffsetMs = serverNow - System.currentTimeMillis();
@@ -379,16 +394,18 @@ public class ApiTimerManager {
                         .putString("cached_key_info", keyResp.toString())
                         .putString("cached_timers", timersResp.toString())
                         .putLong("server_offset_ms", serverTimeOffsetMs)
+                        .putLong("last_fetch_local_ms", lastFetchLocalMs)
                         .apply();
 
-                scheduleAlarmsFromTimers(timersResp);
+                scheduleAlarmsStatic(activity, prefs, timersResp, serverTimeOffsetMs);
+                scheduleBackgroundHeartbeat(activity);
 
                 activity.runOnUiThread(() -> {
                     isFetching = false;
                     updateHeaderStatus();
                     renderTimersContent();
                     if (showToast) {
-                        Toast.makeText(activity, "Ashport timers synced!", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(activity, "Ashport timers & exact alarms synced!", Toast.LENGTH_SHORT).show();
                     }
                 });
             } catch (Exception e) {
@@ -396,7 +413,7 @@ public class ApiTimerManager {
                 activity.runOnUiThread(() -> {
                     isFetching = false;
                     updateHeaderStatus();
-                    syncStatusText.setText("Sync Error: " + msg);
+                    if (syncStatusText != null) syncStatusText.setText("Sync Error: " + msg);
                     if (showToast) {
                         Toast.makeText(activity, "API Error: " + msg, Toast.LENGTH_LONG).show();
                     }
@@ -405,7 +422,42 @@ public class ApiTimerManager {
         });
     }
 
-    private JSONObject fetchEndpoint(String path, String apiKey) throws Exception {
+    /**
+     * Runs completely headless when the app is closed (triggered by 15-min heartbeat or phone boot).
+     */
+    public static void performHeadlessSync(Context context) {
+        SecureKeyStore ks = new SecureKeyStore(context);
+        String apiKey = ks.getApiKey();
+        if (apiKey.isEmpty()) return;
+
+        SharedPreferences prefs = context.getSharedPreferences(PREFS_CACHE, Context.MODE_PRIVATE);
+        try {
+            JSONObject timersResp = fetchEndpointStatic("/v1/me/timers", apiKey);
+            long serverNow = timersResp.optLong("now", System.currentTimeMillis());
+            long offsetMs = serverNow - System.currentTimeMillis();
+
+            prefs.edit()
+                    .putString("cached_timers", timersResp.toString())
+                    .putLong("server_offset_ms", offsetMs)
+                    .putLong("last_fetch_local_ms", System.currentTimeMillis())
+                    .apply();
+
+            scheduleAlarmsStatic(context, prefs, timersResp, offsetMs);
+        } catch (Exception ignored) {
+            // If offline during heartbeat, re-ensure existing cached timers are scheduled
+            try {
+                String cached = prefs.getString("cached_timers", null);
+                long offsetMs = prefs.getLong("server_offset_ms", 0L);
+                if (cached != null) {
+                    scheduleAlarmsStatic(context, prefs, new JSONObject(cached), offsetMs);
+                }
+            } catch (Exception ignored2) {}
+        } finally {
+            scheduleBackgroundHeartbeat(context);
+        }
+    }
+
+    private static JSONObject fetchEndpointStatic(String path, String apiKey) throws Exception {
         String[] baseCandidates = {"https://ashport.net", "https://ashport.net/api"};
         Exception lastErr = null;
 
@@ -458,7 +510,6 @@ public class ApiTimerManager {
 
         long nowMs = System.currentTimeMillis() + serverTimeOffsetMs;
 
-        // --- A. CHARACTER STATUS, HOSPITAL/JAIL & TRAVEL BANNER ---
         JSONObject statusObj = lastTimersJson.optJSONObject("status");
         String statusKind = statusObj != null ? statusObj.optString("kind", "ok") : "ok";
         String statusReason = statusObj != null ? statusObj.optString("reason", "") : "";
@@ -496,7 +547,6 @@ public class ApiTimerManager {
             liveContentBox.addView(alertCard);
         }
 
-        // --- B. 4 CORE BARS (Energy, Nerve, Health, Mood) ---
         JSONObject bars = lastTimersJson.optJSONObject("bars");
         if (bars != null) {
             LinearLayout barsCard = new LinearLayout(activity);
@@ -517,7 +567,6 @@ public class ApiTimerManager {
             liveContentBox.addView(barsCard);
         }
 
-        // --- C. COOLDOWNS, COURSE, BANK & REFILLS CARD ---
         LinearLayout timersCard = new LinearLayout(activity);
         timersCard.setOrientation(LinearLayout.VERTICAL);
         int pad = dp(14);
@@ -542,7 +591,6 @@ public class ApiTimerManager {
         timersCard.addView(makeTimerLine("🎓 Education Course", courseEndsAt, nowMs));
         timersCard.addView(makeTimerLine("🏦 Bank Investment", bankMaturesAt, nowMs));
 
-        // Daily Refills & New Day Reset
         JSONObject refills = lastTimersJson.optJSONObject("refills");
         if (refills != null) {
             boolean eRefill = refills.optBoolean("energy", false);
@@ -557,7 +605,6 @@ public class ApiTimerManager {
             timersCard.addView(makeRowText("🌅 Next New Day", formatDuration(newDayAt - nowMs), "#90caf9"));
         }
 
-        // Active Buffs
         JSONArray buffs = lastTimersJson.optJSONArray("buffs");
         if (buffs != null && buffs.length() > 0) {
             for (int i = 0; i < buffs.length(); i++) {
@@ -630,84 +677,128 @@ public class ApiTimerManager {
     }
 
     // =========================================================================
-    // 6. SCHEDULE NATIVE ANDROID ALARMS FOR UPCOMING TIMESTAMPS
+    // 6. EXACT OS ALARMS & 15-MINUTE SELF-SUSTAINING HEARTBEAT
     // =========================================================================
-    private void scheduleAlarmsFromTimers(JSONObject t) {
-        long nowServer = System.currentTimeMillis() + serverTimeOffsetMs;
+    public static void scheduleAlarmsStatic(Context context, SharedPreferences prefs, JSONObject t, long serverOffsetMs) {
+        long nowServer = System.currentTimeMillis() + serverOffsetMs;
 
         JSONObject bars = t.optJSONObject("bars");
         if (bars != null) {
-            scheduleSingleAlarm(101, "notify_energy", bars.optJSONObject("energy") != null ? bars.optJSONObject("energy").optLong("fullAt", 0L) : 0L,
+            scheduleSingleAlarmStatic(context, prefs, 101, "notify_energy",
+                    bars.optJSONObject("energy") != null ? bars.optJSONObject("energy").optLong("fullAt", 0L) : 0L,
                     nowServer, "⚡ Energy Full", "Your Ashport Energy bar has reached maximum capacity!");
-            scheduleSingleAlarm(102, "notify_nerve", bars.optJSONObject("nerve") != null ? bars.optJSONObject("nerve").optLong("fullAt", 0L) : 0L,
+            scheduleSingleAlarmStatic(context, prefs, 102, "notify_nerve",
+                    bars.optJSONObject("nerve") != null ? bars.optJSONObject("nerve").optLong("fullAt", 0L) : 0L,
                     nowServer, "🔥 Nerve Full", "Your Ashport Nerve bar is full and ready for crimes!");
-            scheduleSingleAlarm(103, "notify_health", bars.optJSONObject("health") != null ? bars.optJSONObject("health").optLong("fullAt", 0L) : 0L,
+            scheduleSingleAlarmStatic(context, prefs, 103, "notify_health",
+                    bars.optJSONObject("health") != null ? bars.optJSONObject("health").optLong("fullAt", 0L) : 0L,
                     nowServer, "❤️ Health Full", "Your Health bar is back to 100%.");
-            scheduleSingleAlarm(104, "notify_mood", bars.optJSONObject("mood") != null ? bars.optJSONObject("mood").optLong("fullAt", 0L) : 0L,
+            scheduleSingleAlarmStatic(context, prefs, 104, "notify_mood",
+                    bars.optJSONObject("mood") != null ? bars.optJSONObject("mood").optLong("fullAt", 0L) : 0L,
                     nowServer, "😊 Mood Full", "Your Mood bar has fully regenerated.");
         }
 
         JSONObject cds = t.optJSONObject("cooldowns");
         if (cds != null) {
-            scheduleSingleAlarm(105, "notify_drug", cds.optLong("drug", 0L),
+            scheduleSingleAlarmStatic(context, prefs, 105, "notify_drug", cds.optLong("drug", 0L),
                     nowServer, "💊 Drug Cooldown Ready", "Your drug cooldown has ended.");
-            scheduleSingleAlarm(106, "notify_booster", cds.optLong("booster", 0L),
+            scheduleSingleAlarmStatic(context, prefs, 106, "notify_booster", cds.optLong("booster", 0L),
                     nowServer, "🚀 Booster Cooldown Ready", "Your booster cooldown has ended.");
-            scheduleSingleAlarm(107, "notify_medical", cds.optLong("medical", 0L),
+            scheduleSingleAlarmStatic(context, prefs, 107, "notify_medical", cds.optLong("medical", 0L),
                     nowServer, "🩹 Medical Cooldown Ready", "Your medical cooldown has cleared.");
         }
 
         JSONObject travel = t.optJSONObject("travel");
         long landsAt = travel != null ? travel.optLong("landsAt", 0L) : 0L;
         String dest = travel != null ? travel.optString("name", "your destination") : "your destination";
-        scheduleSingleAlarm(108, "notify_travel", landsAt,
+        scheduleSingleAlarmStatic(context, prefs, 108, "notify_travel", landsAt,
                 nowServer, "✈️ Flight Landed", "You have landed in " + dest + "!");
 
         long hospRelease = Math.max(t.optLong("hospitalUntil", 0L), t.optLong("jailUntil", 0L));
-        scheduleSingleAlarm(109, "notify_status", hospRelease,
+        scheduleSingleAlarmStatic(context, prefs, 109, "notify_status", hospRelease,
                 nowServer, "🏥 Released!", "You are out of hospital/jail in Ashport.");
 
-        scheduleSingleAlarm(110, "notify_course", t.optLong("courseEndsAt", 0L),
+        scheduleSingleAlarmStatic(context, prefs, 110, "notify_course", t.optLong("courseEndsAt", 0L),
                 nowServer, "🎓 Course Completed", "Your Ashport education course has finished!");
 
-        scheduleSingleAlarm(111, "notify_bank", t.optLong("bankMaturesAt", 0L),
+        scheduleSingleAlarmStatic(context, prefs, 111, "notify_bank", t.optLong("bankMaturesAt", 0L),
                 nowServer, "🏦 Bank Deposit Matured", "Your Ashport bank investment is ready to collect!");
     }
 
-    private void scheduleSingleAlarm(int notifId, String prefKey, long targetServerMs, long nowServerMs, String title, String message) {
-        AlarmManager am = (AlarmManager) activity.getSystemService(Context.ALARM_SERVICE);
+    private static void scheduleSingleAlarmStatic(Context context, SharedPreferences prefs, int notifId, String prefKey,
+                                                  long targetServerMs, long nowServerMs, String title, String message) {
+        AlarmManager am = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
         if (am == null) return;
 
-        Intent intent = new Intent(activity, TimerAlarmReceiver.class);
+        Intent intent = new Intent(context, TimerAlarmReceiver.class);
+        intent.setAction(TimerAlarmReceiver.ACTION_TIMER_ALARM);
         intent.putExtra("notif_id", notifId);
         intent.putExtra("title", title);
         intent.putExtra("message", message);
 
         PendingIntent pi = PendingIntent.getBroadcast(
-                activity,
+                context,
                 notifId,
                 intent,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
         );
 
         boolean enabled = prefs.getBoolean(prefKey, true);
+        // Only schedule if target is in the future (and wasn't already fired for this exact timestamp)
+        long lastScheduledTarget = prefs.getLong("scheduled_target_" + notifId, 0L);
         if (!enabled || targetServerMs <= nowServerMs) {
             am.cancel(pi);
+            if (targetServerMs <= nowServerMs) {
+                prefs.edit().remove("scheduled_target_" + notifId).apply();
+            }
             return;
         }
 
         long delayMs = targetServerMs - nowServerMs;
         long triggerLocalMs = System.currentTimeMillis() + delayMs;
+        prefs.edit().putLong("scheduled_target_" + notifId, targetServerMs).apply();
 
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !am.canScheduleExactAlarms()) {
-                am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerLocalMs, pi);
-            } else {
-                am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerLocalMs, pi);
-            }
+            am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerLocalMs, pi);
         } catch (SecurityException se) {
             am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerLocalMs, pi);
         }
+    }
+
+    public static void scheduleBackgroundHeartbeat(Context context) {
+        AlarmManager am = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+        if (am == null) return;
+
+        Intent intent = new Intent(context, TimerAlarmReceiver.class);
+        intent.setAction(TimerAlarmReceiver.ACTION_BACKGROUND_HEARTBEAT);
+
+        PendingIntent pi = PendingIntent.getBroadcast(
+                context,
+                HEARTBEAT_ALARM_ID,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+
+        long triggerAt = System.currentTimeMillis() + HEARTBEAT_INTERVAL_MS;
+        try {
+            am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi);
+        } catch (SecurityException se) {
+            am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerAt, pi);
+        }
+    }
+
+    public static void cancelBackgroundHeartbeat(Context context) {
+        AlarmManager am = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
+        if (am == null) return;
+        Intent intent = new Intent(context, TimerAlarmReceiver.class);
+        intent.setAction(TimerAlarmReceiver.ACTION_BACKGROUND_HEARTBEAT);
+        PendingIntent pi = PendingIntent.getBroadcast(
+                context,
+                HEARTBEAT_ALARM_ID,
+                intent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+        am.cancel(pi);
     }
 
     private String formatDuration(long diffMs) {
