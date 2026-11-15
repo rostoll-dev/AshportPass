@@ -1,5 +1,6 @@
 package com.rostoll.ashportpda;
 
+import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.AlertDialog;
@@ -8,6 +9,7 @@ import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
 import android.content.pm.verify.domain.DomainVerificationManager;
 import android.content.pm.verify.domain.DomainVerificationUserState;
 import android.graphics.Color;
@@ -56,6 +58,7 @@ import java.util.Set;
 
 public class MainActivity extends Activity {
     private static final String DEFAULT_URL = "https://ashport.net";
+    private static final int REQ_POST_NOTIFICATIONS = 2001;
 
     private static class BrowserTab {
         WebView webView;
@@ -124,13 +127,43 @@ public class MainActivity extends Activity {
         createNewTab(initialUrl != null ? initialUrl : DEFAULT_URL, true);
         showBrowser();
 
-        // Check if ashport.net link handling is enabled; prompt user if not
-        checkAndPromptLinkHandling(false);
+        // 1. Run sequential first-launch onboarding: Notifications first -> then Link Catching
+        startOnboardingFlow();
+
+        // 2. Check GitHub Releases for updates in the background
         autoUpdater.checkForUpdates(false);
     }
 
     // =========================================================================
-    // LINK CATCHING VERIFICATION & ONE-TAP SETTINGS LAUNCHER
+    // SEQUENTIAL ONBOARDING (1. Notifications -> 2. Link Catching)
+    // =========================================================================
+    private void startOnboardingFlow() {
+        updateLinkStatusCardUI(isAshportLinkHandlingEnabled());
+
+        if (Build.VERSION.SDK_INT >= 33) {
+            SharedPreferences prefs = getSharedPreferences("AshportPDA_AppPrefs", Context.MODE_PRIVATE);
+            boolean askedNotif = prefs.getBoolean("prompted_notifications_v1", false);
+            if (!askedNotif && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                prefs.edit().putBoolean("prompted_notifications_v1", true).apply();
+                requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQ_POST_NOTIFICATIONS);
+                return; // Wait for onRequestPermissionsResult before prompting Link Catching
+            }
+        }
+
+        checkAndPromptLinkHandling(false);
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQ_POST_NOTIFICATIONS) {
+            // Once the user answers the Notifications prompt, trigger the Link Catching check
+            checkAndPromptLinkHandling(false);
+        }
+    }
+
+    // =========================================================================
+    // LINK CATCHING VERIFICATION & AUTO-HIDING HUB CARD
     // =========================================================================
     private boolean isAshportLinkHandlingEnabled() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -157,7 +190,7 @@ public class MainActivity extends Activity {
 
         if (enabled) return;
 
-        SharedPreferences prefs = getSharedPreferences("Ashport Pass_AppPrefs", Context.MODE_PRIVATE);
+        SharedPreferences prefs = getSharedPreferences("AshportPDA_AppPrefs", Context.MODE_PRIVATE);
         boolean alreadyPrompted = prefs.getBoolean("prompted_link_handling", false);
         if (!forceDialog && alreadyPrompted) return;
 
@@ -192,19 +225,20 @@ public class MainActivity extends Activity {
 
     private void updateLinkStatusCardUI(boolean enabled) {
         if (linkCardContainer == null || linkCardTitle == null || linkCardSub == null) return;
+
+        // Hide the card completely once link catching is active
+        if (enabled) {
+            linkCardContainer.setVisibility(View.GONE);
+            return;
+        }
+
+        linkCardContainer.setVisibility(View.VISIBLE);
         GradientDrawable bg = new GradientDrawable();
         bg.setColor(Color.parseColor("#132738"));
         bg.setCornerRadius(dp(10));
-
-        if (enabled) {
-            bg.setStroke(dp(2), Color.parseColor("#2e7d32"));
-            linkCardTitle.setText("🔗  Default Link Handler: ACTIVE");
-            linkCardSub.setText("ashport.net links open automatically in Ashport Pass (Tap to manage)");
-        } else {
-            bg.setStroke(dp(2), Color.parseColor("#ffb74d"));
-            linkCardTitle.setText("⚠️  Enable Ashport Link Catching");
-            linkCardSub.setText("Tap here to open Android's 'Open by default' screen and check ashport.net");
-        }
+        bg.setStroke(dp(2), Color.parseColor("#ffb74d"));
+        linkCardTitle.setText("⚠️  Enable Ashport Link Catching");
+        linkCardSub.setText("Tap here to open Android's 'Open by default' screen and check ashport.net");
         linkCardContainer.setBackground(bg);
     }
 
@@ -252,7 +286,7 @@ public class MainActivity extends Activity {
                 v -> showBrowser()
         ));
 
-        // 2. Dynamic Link Catching Status Card (opens Android 16 hidden settings directly)
+        // 2. Dynamic Link Catching Warning Card (Auto-hidden once enabled)
         linkCardContainer = new LinearLayout(this);
         linkCardContainer.setOrientation(LinearLayout.VERTICAL);
         int cPad = dp(14);
@@ -303,12 +337,14 @@ public class MainActivity extends Activity {
                 })
         ));
 
+        // 5. App Updates Card
         content.addView(makeHubCard(
                 "⬇  App Updates (v" + (autoUpdater != null ? autoUpdater.getCurrentVersionName() : "1.0.0") + ")",
                 "Tap to check GitHub Releases for a newer Ashport Pass APK",
                 "#234156",
                 v -> autoUpdater.checkForUpdates(true)
         ));
+
         scroll.addView(content);
         layout.addView(scroll, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
