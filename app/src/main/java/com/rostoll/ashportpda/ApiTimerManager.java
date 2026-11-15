@@ -4,6 +4,9 @@ import android.Manifest;
 import android.app.Activity;
 import android.app.AlarmManager;
 import android.app.AlertDialog;
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
@@ -37,6 +40,8 @@ import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -44,7 +49,22 @@ import java.util.concurrent.Executors;
 public class ApiTimerManager {
     public static final String PREFS_CACHE = "AshportPDA_TimersCache";
     private static final int HEARTBEAT_ALARM_ID = 9999;
-    private static final long HEARTBEAT_INTERVAL_MS = 5L * 60L * 1000L; // 15 minutes
+    private static final long HEARTBEAT_INTERVAL_MS = 5L * 60L * 1000L; // 5 minutes
+
+    // Definition table: {id, alertKey, liveKey, defaultLiveBool, label}
+    private static final String[][] TIMER_CONFIGS = {
+            {"108", "notify_travel",  "live_travel",  "true",  "✈️ Flight / Travel"},
+            {"109", "notify_status",  "live_status",  "true",  "🏥 Hospital / Jail"},
+            {"105", "notify_drug",    "live_drug",    "true",  "💊 Drug Cooldown"},
+            {"106", "notify_booster", "live_booster", "false", "🚀 Booster Cooldown"},
+            {"107", "notify_medical", "live_medical", "false", "🩹 Medical Cooldown"},
+            {"101", "notify_energy",  "live_energy",  "false", "⚡ Energy Bar"},
+            {"102", "notify_nerve",   "live_nerve",   "false", "🔥 Nerve Bar"},
+            {"103", "notify_health",  "live_health",  "false", "❤️ Health Bar"},
+            {"104", "notify_mood",    "live_mood",    "false", "😊 Mood Bar"},
+            {"110", "notify_course",  "live_course",  "true",  "🎓 Education Course"},
+            {"111", "notify_bank",    "live_bank",    "false", "🏦 Bank Investment"}
+    };
 
     private final Activity activity;
     private final SecureKeyStore keyStore;
@@ -107,10 +127,6 @@ public class ApiTimerManager {
         tickHandler.removeCallbacks(uiTicker);
     }
 
-    /**
-     * Called automatically when WebView pages finish loading or when the app is minimized.
-     * Debounced to avoid hitting rate limits while clicking rapidly.
-     */
     public void syncIfNeededOnActivity(long minIntervalMs) {
         if (!keyStore.hasApiKey() || isFetching) return;
         if (System.currentTimeMillis() - lastFetchLocalMs >= minIntervalMs) {
@@ -155,7 +171,7 @@ public class ApiTimerManager {
         syncStatusText = new TextView(activity);
         syncStatusText.setTextColor(Color.parseColor("#90a4ae"));
         syncStatusText.setTextSize(12f);
-        syncStatusText.setPadding(0, dp(4), 0, dp(10));
+        syncStatusText.setPadding(0, dp(4), dp(0), dp(10));
         controlCard.addView(syncStatusText);
 
         LinearLayout btnRow = new LinearLayout(activity);
@@ -207,7 +223,7 @@ public class ApiTimerManager {
                 String kName = lastKeyInfoJson.optString("name", "Key");
                 JSONObject rl = lastKeyInfoJson.optJSONObject("rateLimit");
                 int rem = rl != null ? rl.optInt("remaining", 60) : 60;
-                playerInfo = kName + (pid > 0 ? " [#" + pid + "]" : "") + " • " + rem + "/60 req • Bg Sync ON";
+                playerInfo = kName + (pid > 0 ? " [#" + pid + "]" : "") + " • " + rem + "/60 req • 5m Sync ON";
             }
             keyStatusBadge.setText("ENCRYPTED");
             keyStatusBadge.setTextColor(Color.parseColor("#69f0ae"));
@@ -285,7 +301,7 @@ public class ApiTimerManager {
                         lastTimersJson = null;
                         lastKeyInfoJson = null;
                         prefs.edit().clear().apply();
-                        cancelBackgroundHeartbeat(activity);
+                        cancelAllNotificationsAndAlarms(activity);
                         updateHeaderStatus();
                         renderTimersContent();
                         Toast.makeText(activity, "API Key cleared", Toast.LENGTH_SHORT).show();
@@ -300,7 +316,7 @@ public class ApiTimerManager {
                     lastTimersJson = null;
                     lastKeyInfoJson = null;
                     prefs.edit().clear().apply();
-                    cancelBackgroundHeartbeat(activity);
+                    cancelAllNotificationsAndAlarms(activity);
                     updateHeaderStatus();
                     renderTimersContent();
                     Toast.makeText(activity, "API Key removed from vault", Toast.LENGTH_SHORT).show();
@@ -310,7 +326,7 @@ public class ApiTimerManager {
     }
 
     // =========================================================================
-    // 3. NOTIFICATION TOGGLES MODAL
+    // 3. DUAL-TOGGLE NOTIFICATION MODAL (⏱ Live Bar + 🔔 End Alert)
     // =========================================================================
     public void showNotificationSettingsModal() {
         if (Build.VERSION.SDK_INT >= 33) {
@@ -322,45 +338,92 @@ public class ApiTimerManager {
         ScrollView scroll = new ScrollView(activity);
         LinearLayout layout = new LinearLayout(activity);
         layout.setOrientation(LinearLayout.VERTICAL);
-        int pad = dp(18);
+        int pad = dp(14);
         layout.setPadding(pad, pad, pad, pad);
         layout.setBackgroundColor(Color.parseColor("#162634"));
         scroll.addView(layout);
 
-        String[][] items = {
-                {"notify_energy", "⚡ Energy Bar Full"},
-                {"notify_nerve", "🔥 Nerve Bar Full"},
-                {"notify_health", "❤️ Health Bar Full"},
-                {"notify_mood", "😊 Mood Bar Full"},
-                {"notify_drug", "💊 Drug Cooldown Ended"},
-                {"notify_booster", "🚀 Booster Cooldown Ended"},
-                {"notify_medical", "🩹 Medical Cooldown Ended"},
-                {"notify_travel", "✈️ Flight Landed"},
-                {"notify_status", "🏥 Hospital / Jail Release"},
-                {"notify_course", "🎓 Education Course Finished"},
-                {"notify_bank", "🏦 Bank Investment Matured"}
-        };
+        TextView legend = new TextView(activity);
+        legend.setText("Choose per timer:\n• ⏱ Live: Pins an ongoing live countdown bar with ETA in your status bar while active.\n• 🔔 Alert: Vibrates & notifies you when the timer hits 00:00.");
+        legend.setTextColor(Color.parseColor("#90a4ae"));
+        legend.setTextSize(12f);
+        legend.setPadding(0, 0, 0, dp(10));
+        layout.addView(legend);
 
-        for (String[] item : items) {
-            final String prefKey = item[0];
-            Switch sw = new Switch(activity);
-            sw.setText(item[1]);
-            sw.setTextColor(Color.WHITE);
-            sw.setTextSize(14f);
-            sw.setPadding(0, dp(10), 0, dp(10));
-            sw.setChecked(prefs.getBoolean(prefKey, true));
-            sw.setOnCheckedChangeListener((b, checked) -> prefs.edit().putBoolean(prefKey, checked).apply());
-            layout.addView(sw);
+        // Header Row
+        LinearLayout headerRow = new LinearLayout(activity);
+        headerRow.setOrientation(LinearLayout.HORIZONTAL);
+        headerRow.setPadding(0, dp(4), 0, dp(6));
+
+        TextView hTimer = new TextView(activity);
+        hTimer.setText("TIMER");
+        hTimer.setTextColor(Color.parseColor("#f2851d"));
+        hTimer.setTextSize(11f);
+        hTimer.setTypeface(Typeface.DEFAULT_BOLD);
+        headerRow.addView(hTimer, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+        TextView hLive = new TextView(activity);
+        hLive.setText("⏱ Live");
+        hLive.setTextColor(Color.parseColor("#64b5f6"));
+        hLive.setTextSize(11f);
+        hLive.setTypeface(Typeface.DEFAULT_BOLD);
+        hLive.setGravity(Gravity.CENTER);
+        headerRow.addView(hLive, new LinearLayout.LayoutParams(dp(64), ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        TextView hAlert = new TextView(activity);
+        hAlert.setText("🔔 Alert");
+        hAlert.setTextColor(Color.parseColor("#69f0ae"));
+        hAlert.setTextSize(11f);
+        hAlert.setTypeface(Typeface.DEFAULT_BOLD);
+        hAlert.setGravity(Gravity.CENTER);
+        headerRow.addView(hAlert, new LinearLayout.LayoutParams(dp(64), ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        layout.addView(headerRow);
+
+        for (String[] cfg : TIMER_CONFIGS) {
+            final String alertKey = cfg[1];
+            final String liveKey = cfg[2];
+            final boolean defLive = Boolean.parseBoolean(cfg[3]);
+            final String labelText = cfg[4];
+
+            LinearLayout row = new LinearLayout(activity);
+            row.setOrientation(LinearLayout.HORIZONTAL);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            row.setPadding(0, dp(6), 0, dp(6));
+
+            TextView lbl = new TextView(activity);
+            lbl.setText(labelText);
+            lbl.setTextColor(Color.WHITE);
+            lbl.setTextSize(13f);
+            row.addView(lbl, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+            LinearLayout liveWrap = new LinearLayout(activity);
+            liveWrap.setGravity(Gravity.CENTER);
+            Switch liveSw = new Switch(activity);
+            liveSw.setChecked(prefs.getBoolean(liveKey, defLive));
+            liveSw.setOnCheckedChangeListener((b, checked) -> prefs.edit().putBoolean(liveKey, checked).apply());
+            liveWrap.addView(liveSw);
+            row.addView(liveWrap, new LinearLayout.LayoutParams(dp(64), ViewGroup.LayoutParams.WRAP_CONTENT));
+
+            LinearLayout alertWrap = new LinearLayout(activity);
+            alertWrap.setGravity(Gravity.CENTER);
+            Switch alertSw = new Switch(activity);
+            alertSw.setChecked(prefs.getBoolean(alertKey, true));
+            alertSw.setOnCheckedChangeListener((b, checked) -> prefs.edit().putBoolean(alertKey, checked).apply());
+            alertWrap.addView(alertSw);
+            row.addView(alertWrap, new LinearLayout.LayoutParams(dp(64), ViewGroup.LayoutParams.WRAP_CONTENT));
+
+            layout.addView(row);
         }
 
         new AlertDialog.Builder(activity, android.R.style.Theme_DeviceDefault_Dialog_Alert)
-                .setTitle("🔔 Timer Notification Alerts")
+                .setTitle("🔔 Live Bars & Timer Alerts")
                 .setView(scroll)
-                .setPositiveButton("Apply & Reschedule", (d, w) -> {
+                .setPositiveButton("Apply Now", (d, w) -> {
                     if (lastTimersJson != null) {
                         scheduleAlarmsStatic(activity, prefs, lastTimersJson, serverTimeOffsetMs);
                         scheduleBackgroundHeartbeat(activity);
-                        Toast.makeText(activity, "Exact alarms updated!", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(activity, "Live bars & alarms updated!", Toast.LENGTH_SHORT).show();
                     }
                 })
                 .show();
@@ -405,7 +468,7 @@ public class ApiTimerManager {
                     updateHeaderStatus();
                     renderTimersContent();
                     if (showToast) {
-                        Toast.makeText(activity, "Ashport timers & exact alarms synced!", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(activity, "Ashport timers & live bars synced!", Toast.LENGTH_SHORT).show();
                     }
                 });
             } catch (Exception e) {
@@ -422,9 +485,6 @@ public class ApiTimerManager {
         });
     }
 
-    /**
-     * Runs completely headless when the app is closed (triggered by 15-min heartbeat or phone boot).
-     */
     public static void performHeadlessSync(Context context) {
         SecureKeyStore ks = new SecureKeyStore(context);
         String apiKey = ks.getApiKey();
@@ -444,7 +504,6 @@ public class ApiTimerManager {
 
             scheduleAlarmsStatic(context, prefs, timersResp, offsetMs);
         } catch (Exception ignored) {
-            // If offline during heartbeat, re-ensure existing cached timers are scheduled
             try {
                 String cached = prefs.getString("cached_timers", null);
                 long offsetMs = prefs.getLong("server_offset_ms", 0L);
@@ -677,64 +736,126 @@ public class ApiTimerManager {
     }
 
     // =========================================================================
-    // 6. EXACT OS ALARMS & 15-MINUTE SELF-SUSTAINING HEARTBEAT
+    // 6. SCHEDULE EXACT OS ALARMS & ONGOING LIVE CHRONOMETER NOTIFICATIONS
     // =========================================================================
     public static void scheduleAlarmsStatic(Context context, SharedPreferences prefs, JSONObject t, long serverOffsetMs) {
         long nowServer = System.currentTimeMillis() + serverOffsetMs;
 
+        // 1. Bars (Energy, Nerve, Health, Mood)
         JSONObject bars = t.optJSONObject("bars");
         if (bars != null) {
-            scheduleSingleAlarmStatic(context, prefs, 101, "notify_energy",
-                    bars.optJSONObject("energy") != null ? bars.optJSONObject("energy").optLong("fullAt", 0L) : 0L,
-                    nowServer, "⚡ Energy Full", "Your Ashport Energy bar has reached maximum capacity!");
-            scheduleSingleAlarmStatic(context, prefs, 102, "notify_nerve",
-                    bars.optJSONObject("nerve") != null ? bars.optJSONObject("nerve").optLong("fullAt", 0L) : 0L,
-                    nowServer, "🔥 Nerve Full", "Your Ashport Nerve bar is full and ready for crimes!");
-            scheduleSingleAlarmStatic(context, prefs, 103, "notify_health",
-                    bars.optJSONObject("health") != null ? bars.optJSONObject("health").optLong("fullAt", 0L) : 0L,
-                    nowServer, "❤️ Health Full", "Your Health bar is back to 100%.");
-            scheduleSingleAlarmStatic(context, prefs, 104, "notify_mood",
-                    bars.optJSONObject("mood") != null ? bars.optJSONObject("mood").optLong("fullAt", 0L) : 0L,
-                    nowServer, "😊 Mood Full", "Your Mood bar has fully regenerated.");
+            JSONObject eBar = bars.optJSONObject("energy");
+            handleTimerEntryStatic(context, prefs, 101, "notify_energy", "live_energy", false,
+                    eBar != null ? eBar.optLong("fullAt", 0L) : 0L, nowServer,
+                    eBar != null ? eBar.optInt("value", 0) : 0, eBar != null ? eBar.optInt("max", 100) : 100,
+                    "⚡ Regenerating Energy",
+                    "Energy (" + (eBar != null ? eBar.optInt("value", 0) : 0) + "/" + (eBar != null ? eBar.optInt("max", 100) : 100) + ")",
+                    "⚡ Energy Full", "Your Ashport Energy bar has reached maximum capacity!");
+
+            JSONObject nBar = bars.optJSONObject("nerve");
+            handleTimerEntryStatic(context, prefs, 102, "notify_nerve", "live_nerve", false,
+                    nBar != null ? nBar.optLong("fullAt", 0L) : 0L, nowServer,
+                    nBar != null ? nBar.optInt("value", 0) : 0, nBar != null ? nBar.optInt("max", 100) : 100,
+                    "🔥 Regenerating Nerve",
+                    "Nerve (" + (nBar != null ? nBar.optInt("value", 0) : 0) + "/" + (nBar != null ? nBar.optInt("max", 100) : 100) + ")",
+                    "🔥 Nerve Full", "Your Ashport Nerve bar is full and ready for crimes!");
+
+            JSONObject hBar = bars.optJSONObject("health");
+            handleTimerEntryStatic(context, prefs, 103, "notify_health", "live_health", false,
+                    hBar != null ? hBar.optLong("fullAt", 0L) : 0L, nowServer,
+                    hBar != null ? hBar.optInt("value", 0) : 0, hBar != null ? hBar.optInt("max", 100) : 100,
+                    "❤️ Healing Health",
+                    "Health (" + (hBar != null ? hBar.optInt("value", 0) : 0) + "/" + (hBar != null ? hBar.optInt("max", 100) : 100) + ")",
+                    "❤️ Health Full", "Your Health bar is back to 100%.");
+
+            JSONObject mBar = bars.optJSONObject("mood");
+            handleTimerEntryStatic(context, prefs, 104, "notify_mood", "live_mood", false,
+                    mBar != null ? mBar.optLong("fullAt", 0L) : 0L, nowServer,
+                    mBar != null ? mBar.optInt("value", 0) : 0, mBar != null ? mBar.optInt("max", 100) : 100,
+                    "😊 Recovering Mood",
+                    "Mood (" + (mBar != null ? mBar.optInt("value", 0) : 0) + "/" + (mBar != null ? mBar.optInt("max", 100) : 100) + ")",
+                    "😊 Mood Full", "Your Mood bar has fully regenerated.");
         }
 
+        // 2. Cooldowns (Drug, Booster, Medical)
         JSONObject cds = t.optJSONObject("cooldowns");
         if (cds != null) {
-            scheduleSingleAlarmStatic(context, prefs, 105, "notify_drug", cds.optLong("drug", 0L),
-                    nowServer, "💊 Drug Cooldown Ready", "Your drug cooldown has ended.");
-            scheduleSingleAlarmStatic(context, prefs, 106, "notify_booster", cds.optLong("booster", 0L),
-                    nowServer, "🚀 Booster Cooldown Ready", "Your booster cooldown has ended.");
-            scheduleSingleAlarmStatic(context, prefs, 107, "notify_medical", cds.optLong("medical", 0L),
-                    nowServer, "🩹 Medical Cooldown Ready", "Your medical cooldown has cleared.");
+            handleTimerEntryStatic(context, prefs, 105, "notify_drug", "live_drug", true,
+                    cds.optLong("drug", 0L), nowServer, -1, -1,
+                    "💊 Drug Cooldown Active", "Waiting for drug cooldown to clear",
+                    "💊 Drug Cooldown Ready", "Your drug cooldown has ended.");
+
+            handleTimerEntryStatic(context, prefs, 106, "notify_booster", "live_booster", false,
+                    cds.optLong("booster", 0L), nowServer, -1, -1,
+                    "🚀 Booster Cooldown Active", "Waiting for booster cooldown to clear",
+                    "🚀 Booster Cooldown Ready", "Your booster cooldown has ended.");
+
+            handleTimerEntryStatic(context, prefs, 107, "notify_medical", "live_medical", false,
+                    cds.optLong("medical", 0L), nowServer, -1, -1,
+                    "🩹 Medical Cooldown Active", "Waiting for medical cooldown to clear",
+                    "🩹 Medical Cooldown Ready", "Your medical cooldown has cleared.");
         }
 
+        // 3. Travel / Flight
         JSONObject travel = t.optJSONObject("travel");
         long landsAt = travel != null ? travel.optLong("landsAt", 0L) : 0L;
-        String dest = travel != null ? travel.optString("name", "your destination") : "your destination";
-        scheduleSingleAlarmStatic(context, prefs, 108, "notify_travel", landsAt,
-                nowServer, "✈️ Flight Landed", "You have landed in " + dest + "!");
+        String dest = travel != null ? travel.optString("name", travel.optString("dest", "Destination")) : "Destination";
+        boolean returning = travel != null && "home".equalsIgnoreCase(travel.optString("dir"));
+        String flightLiveTitle = returning ? "✈️ Returning to Ashport" : "✈️ Traveling to " + dest;
+        String flightLiveSub = returning ? "Inbound flight from " + dest : "Outbound flight • En route to " + dest;
 
-        long hospRelease = Math.max(t.optLong("hospitalUntil", 0L), t.optLong("jailUntil", 0L));
-        scheduleSingleAlarmStatic(context, prefs, 109, "notify_status", hospRelease,
-                nowServer, "🏥 Released!", "You are out of hospital/jail in Ashport.");
+        handleTimerEntryStatic(context, prefs, 108, "notify_travel", "live_travel", true,
+                landsAt, nowServer, -1, -1,
+                flightLiveTitle, flightLiveSub,
+                "✈️ Flight Landed", "You have landed in " + (returning ? "Ashport" : dest) + "!");
 
-        scheduleSingleAlarmStatic(context, prefs, 110, "notify_course", t.optLong("courseEndsAt", 0L),
-                nowServer, "🎓 Course Completed", "Your Ashport education course has finished!");
+        // 4. Hospital / Jail Release
+        long hospUntil = t.optLong("hospitalUntil", 0L);
+        long jailUntil = t.optLong("jailUntil", 0L);
+        long statusUntil = Math.max(hospUntil, jailUntil);
+        boolean isJail = jailUntil > hospUntil;
+        JSONObject statusObj = t.optJSONObject("status");
+        String statusReason = statusObj != null ? statusObj.optString("reason", "") : "";
 
-        scheduleSingleAlarmStatic(context, prefs, 111, "notify_bank", t.optLong("bankMaturesAt", 0L),
-                nowServer, "🏦 Bank Deposit Matured", "Your Ashport bank investment is ready to collect!");
+        handleTimerEntryStatic(context, prefs, 109, "notify_status", "live_status", true,
+                statusUntil, nowServer, -1, -1,
+                isJail ? "⛓ Currently in Jail" : "🏥 Currently Hospitalized",
+                !statusReason.isEmpty() ? statusReason : (isJail ? "Serving sentence" : "Recovering in hospital"),
+                isJail ? "⛓ Released from Jail!" : "🏥 Released from Hospital!",
+                "You are out and ready for action in Ashport.");
+
+        // 5. Education Course
+        handleTimerEntryStatic(context, prefs, 110, "notify_course", "live_course", true,
+                t.optLong("courseEndsAt", 0L), nowServer, -1, -1,
+                "🎓 Education Course in Progress", "Studying current course",
+                "🎓 Course Completed", "Your Ashport education course has finished!");
+
+        // 6. Bank Investment
+        handleTimerEntryStatic(context, prefs, 111, "notify_bank", "live_bank", false,
+                t.optLong("bankMaturesAt", 0L), nowServer, -1, -1,
+                "🏦 Bank Investment Active", "Accruing interest until maturity",
+                "🏦 Bank Deposit Matured", "Your Ashport bank investment is ready to collect!");
     }
 
-    private static void scheduleSingleAlarmStatic(Context context, SharedPreferences prefs, int notifId, String prefKey,
-                                                  long targetServerMs, long nowServerMs, String title, String message) {
+    private static void handleTimerEntryStatic(Context context, SharedPreferences prefs, int notifId,
+                                               String alertPrefKey, String livePrefKey, boolean defaultLive,
+                                               long targetServerMs, long nowServerMs,
+                                               int barVal, int barMax,
+                                               String liveTitle, String liveSubtitle,
+                                               String finishTitle, String finishMessage) {
         AlarmManager am = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
-        if (am == null) return;
+        NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+        if (am == null || nm == null) return;
+
+        boolean alertEnabled = prefs.getBoolean(alertPrefKey, true);
+        boolean liveEnabled = prefs.getBoolean(livePrefKey, defaultLive);
 
         Intent intent = new Intent(context, TimerAlarmReceiver.class);
         intent.setAction(TimerAlarmReceiver.ACTION_TIMER_ALARM);
         intent.putExtra("notif_id", notifId);
-        intent.putExtra("title", title);
-        intent.putExtra("message", message);
+        intent.putExtra("title", finishTitle);
+        intent.putExtra("message", finishMessage);
+        intent.putExtra("alert_enabled", alertEnabled);
 
         PendingIntent pi = PendingIntent.getBroadcast(
                 context,
@@ -743,26 +864,110 @@ public class ApiTimerManager {
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
         );
 
-        boolean enabled = prefs.getBoolean(prefKey, true);
-        // Only schedule if target is in the future (and wasn't already fired for this exact timestamp)
-        long lastScheduledTarget = prefs.getLong("scheduled_target_" + notifId, 0L);
-        if (!enabled || targetServerMs <= nowServerMs) {
+        // If timer is not active (already finished or 0), cancel both alarm and ongoing live notification
+        if (targetServerMs <= nowServerMs) {
             am.cancel(pi);
-            if (targetServerMs <= nowServerMs) {
-                prefs.edit().remove("scheduled_target_" + notifId).apply();
-            }
+            nm.cancel(notifId + 1000);
+            prefs.edit()
+                    .remove("scheduled_target_" + notifId)
+                    .remove("start_server_ms_" + notifId)
+                    .apply();
             return;
         }
 
         long delayMs = targetServerMs - nowServerMs;
         long triggerLocalMs = System.currentTimeMillis() + delayMs;
-        prefs.edit().putLong("scheduled_target_" + notifId, targetServerMs).apply();
 
-        try {
-            am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerLocalMs, pi);
-        } catch (SecurityException se) {
-            am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerLocalMs, pi);
+        // Track start timestamp of this specific target so we can compute a smooth 0-100% progress bar
+        long prevTarget = prefs.getLong("scheduled_target_" + notifId, 0L);
+        long startServerMs = prefs.getLong("start_server_ms_" + notifId, nowServerMs);
+        if (Math.abs(targetServerMs - prevTarget) > 5000L || startServerMs >= targetServerMs) {
+            startServerMs = nowServerMs;
+            prefs.edit()
+                    .putLong("scheduled_target_" + notifId, targetServerMs)
+                    .putLong("start_server_ms_" + notifId, startServerMs)
+                    .apply();
         }
+
+        // Schedule exact alarm at 00:00:00 if either Alert OR Live Bar is enabled (so Live Bar auto-clears at 00:00)
+        if (alertEnabled || liveEnabled) {
+            try {
+                am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerLocalMs, pi);
+            } catch (SecurityException se) {
+                am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, triggerLocalMs, pi);
+            }
+        } else {
+            am.cancel(pi);
+        }
+
+        // Post or remove the Ongoing Live Chronometer Notification (ID = notifId + 1000)
+        if (liveEnabled) {
+            int progressPct;
+            if (barMax > 0 && barVal >= 0) {
+                progressPct = Math.min(100, Math.max(0, (barVal * 100) / barMax));
+            } else {
+                long totalDur = Math.max(1L, targetServerMs - startServerMs);
+                long elapsed = Math.max(0L, nowServerMs - startServerMs);
+                progressPct = (int) Math.min(100L, (elapsed * 100L) / totalDur);
+            }
+            postOngoingChronometerNotification(context, nm, notifId + 1000, triggerLocalMs, progressPct, liveTitle, liveSubtitle);
+        } else {
+            nm.cancel(notifId + 1000);
+        }
+    }
+
+    private static void postOngoingChronometerNotification(Context context, NotificationManager nm,
+                                                           int liveNotifId, long triggerLocalMs,
+                                                           int progressPct, String title, String subtitle) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationChannel liveChannel = new NotificationChannel(
+                    TimerAlarmReceiver.LIVE_CHANNEL_ID,
+                    "Ashport Live Countdowns",
+                    NotificationManager.IMPORTANCE_LOW
+            );
+            liveChannel.setDescription("Silent ongoing countdown bars in status bar (Travel, Hospital, Cooldowns)");
+            liveChannel.setShowBadge(false);
+            liveChannel.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
+            nm.createNotificationChannel(liveChannel);
+        }
+
+        Intent launchIntent = new Intent(context, MainActivity.class);
+        launchIntent.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+        PendingIntent contentIntent = PendingIntent.getActivity(
+                context,
+                liveNotifId,
+                launchIntent,
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+        );
+
+        String etaStr = new SimpleDateFormat("HH:mm", Locale.getDefault()).format(new Date(triggerLocalMs));
+
+        Notification.Builder builder = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                ? new Notification.Builder(context, TimerAlarmReceiver.LIVE_CHANNEL_ID)
+                : new Notification.Builder(context);
+
+        builder.setSmallIcon(android.R.drawable.ic_menu_recent_history)
+                .setContentTitle(title)
+                .setContentText(subtitle + " • Ends at " + etaStr)
+                .setSubText("ETA " + etaStr)
+                .setWhen(triggerLocalMs)
+                .setShowWhen(true)
+                .setUsesChronometer(true)
+                .setOngoing(true)
+                .setOnlyAlertOnce(true)
+                .setProgress(100, progressPct, false)
+                .setContentIntent(contentIntent);
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            builder.setChronometerCountDown(true);
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            builder.setCategory(Notification.CATEGORY_PROGRESS)
+                   .setVisibility(Notification.VISIBILITY_PUBLIC)
+                   .setColor(Color.parseColor("#f2851d"));
+        }
+
+        nm.notify(liveNotifId, builder.build());
     }
 
     public static void scheduleBackgroundHeartbeat(Context context) {
@@ -787,18 +992,19 @@ public class ApiTimerManager {
         }
     }
 
-    public static void cancelBackgroundHeartbeat(Context context) {
+    public static void cancelAllNotificationsAndAlarms(Context context) {
         AlarmManager am = (AlarmManager) context.getSystemService(Context.ALARM_SERVICE);
-        if (am == null) return;
-        Intent intent = new Intent(context, TimerAlarmReceiver.class);
-        intent.setAction(TimerAlarmReceiver.ACTION_BACKGROUND_HEARTBEAT);
-        PendingIntent pi = PendingIntent.getBroadcast(
-                context,
-                HEARTBEAT_ALARM_ID,
-                intent,
-                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
-        );
-        am.cancel(pi);
+        NotificationManager nm = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+        if (am != null) {
+            Intent hb = new Intent(context, TimerAlarmReceiver.class);
+            hb.setAction(TimerAlarmReceiver.ACTION_BACKGROUND_HEARTBEAT);
+            PendingIntent hbPi = PendingIntent.getBroadcast(context, HEARTBEAT_ALARM_ID, hb,
+                    PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+            am.cancel(hbPi);
+        }
+        if (nm != null) {
+            nm.cancelAll();
+        }
     }
 
     private String formatDuration(long diffMs) {
