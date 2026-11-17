@@ -41,6 +41,7 @@ public class ScriptManager {
         public String name;
         public String description;
         public String runAt;
+        public String matchPattern;
         public String code;
         public boolean enabled;
     }
@@ -96,11 +97,13 @@ public class ScriptManager {
         String name = extractMeta(code, "name", fallbackName);
         String desc = extractMeta(code, "description", "Custom Ashport userscript");
         String runAt = extractMeta(code, "run-at", "document-end");
+        String match = extractMeta(code, "match", extractMeta(code, "include", "*://*.ashport.net/*"));
         return new JSONObject()
                 .put("id", id)
                 .put("name", name)
                 .put("description", desc)
                 .put("runAt", runAt)
+                .put("match", match)
                 .put("code", code)
                 .put("enabled", enabled);
     }
@@ -139,6 +142,7 @@ public class ScriptManager {
             s.description = o.optString("description", "");
             s.runAt = o.optString("runAt", "document-end");
             s.code = o.optString("code", "");
+            s.matchPattern = o.optString("match", extractMeta(s.code, "match", "*"));
             s.enabled = o.optBoolean("enabled", true);
             list.add(s);
         }
@@ -162,7 +166,6 @@ public class ScriptManager {
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(Color.parseColor("#0b1926"));
 
-        // Header Bar
         LinearLayout header = new LinearLayout(activity);
         header.setOrientation(LinearLayout.HORIZONTAL);
         header.setGravity(Gravity.CENTER_VERTICAL);
@@ -184,7 +187,6 @@ public class ScriptManager {
         header.addView(closeBtn);
         root.addView(header);
 
-        // Action Bar (+ Paste Script / + Install from URL)
         LinearLayout actions = new LinearLayout(activity);
         actions.setOrientation(LinearLayout.HORIZONTAL);
         actions.setPadding(pad, dp(10), pad, dp(10));
@@ -243,7 +245,6 @@ public class ScriptManager {
             cardLp.bottomMargin = dp(10);
             card.setLayoutParams(cardLp);
 
-            // Top row: Name + Switch
             LinearLayout topRow = new LinearLayout(activity);
             topRow.setOrientation(LinearLayout.HORIZONTAL);
             topRow.setGravity(Gravity.CENTER_VERTICAL);
@@ -261,7 +262,6 @@ public class ScriptManager {
             topRow.addView(toggle);
             card.addView(topRow);
 
-            // Badge / Description
             TextView metaTv = new TextView(activity);
             metaTv.setText("@run-at " + script.runAt + (script.description.isEmpty() ? "" : " • " + script.description));
             metaTv.setTextColor(Color.parseColor("#90a4ae"));
@@ -269,7 +269,6 @@ public class ScriptManager {
             metaTv.setPadding(0, dp(4), 0, dp(10));
             card.addView(metaTv);
 
-            // Bottom buttons: Edit / Delete
             LinearLayout btnRow = new LinearLayout(activity);
             btnRow.setOrientation(LinearLayout.HORIZONTAL);
 

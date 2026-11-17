@@ -9,6 +9,7 @@ import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.verify.domain.DomainVerificationManager;
 import android.content.pm.verify.domain.DomainVerificationUserState;
@@ -18,8 +19,8 @@ import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.provider.Settings;
 import android.os.PowerManager;
+import android.provider.Settings;
 import android.text.Editable;
 import android.text.TextUtils;
 import android.text.TextWatcher;
@@ -45,6 +46,8 @@ import android.window.OnBackInvokedDispatcher;
 import androidx.webkit.ScriptHandler;
 import androidx.webkit.WebViewCompat;
 import androidx.webkit.WebViewFeature;
+
+import org.json.JSONObject;
 
 import java.io.BufferedReader;
 import java.io.InputStream;
@@ -96,7 +99,8 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        WebView.setWebContentsDebuggingEnabled(true);
+        boolean isDebuggable = (getApplicationInfo().flags & ApplicationInfo.FLAG_DEBUGGABLE) != 0;
+        WebView.setWebContentsDebuggingEnabled(isDebuggable);
         cachedPolyfill = readAssetFile("gm_polyfill.js");
 
         shortcutManager = new ShortcutManager(this);
@@ -128,16 +132,10 @@ public class MainActivity extends Activity {
         createNewTab(initialUrl != null ? initialUrl : DEFAULT_URL, true);
         showBrowser();
 
-        // 1. Run sequential first-launch onboarding: Notifications first -> then Link Catching
         startOnboardingFlow();
-
-        // 2. Check GitHub Releases for updates in the background
         autoUpdater.checkForUpdates(false);
     }
 
-    // =========================================================================
-    // SEQUENTIAL ONBOARDING (1. Notifications -> 2. Link Catching)
-    // =========================================================================
     private void startOnboardingFlow() {
         updateLinkStatusCardUI(isAshportLinkHandlingEnabled());
 
@@ -147,7 +145,7 @@ public class MainActivity extends Activity {
             if (!askedNotif && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                 prefs.edit().putBoolean("prompted_notifications_v1", true).apply();
                 requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQ_POST_NOTIFICATIONS);
-                return; // Wait for onRequestPermissionsResult before prompting Link Catching
+                return;
             }
         }
 
@@ -158,14 +156,10 @@ public class MainActivity extends Activity {
     public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == REQ_POST_NOTIFICATIONS) {
-            // Once the user answers the Notifications prompt, trigger the Link Catching check
             checkAndPromptLinkHandling(false);
         }
     }
 
-    // =========================================================================
-    // LINK CATCHING VERIFICATION & AUTO-HIDING HUB CARD
-    // =========================================================================
     private boolean isAshportLinkHandlingEnabled() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             try {
@@ -245,7 +239,6 @@ public class MainActivity extends Activity {
     private void updateLinkStatusCardUI(boolean enabled) {
         if (linkCardContainer == null || linkCardTitle == null || linkCardSub == null) return;
 
-        // Hide the card completely once link catching is active
         if (enabled) {
             linkCardContainer.setVisibility(View.GONE);
             return;
@@ -261,9 +254,6 @@ public class MainActivity extends Activity {
         linkCardContainer.setBackground(bg);
     }
 
-    // =========================================================================
-    // WELCOME / UTILITIES HUB SCREEN
-    // =========================================================================
     private LinearLayout buildHubScreen() {
         LinearLayout layout = new LinearLayout(this);
         layout.setOrientation(LinearLayout.VERTICAL);
@@ -297,7 +287,6 @@ public class MainActivity extends Activity {
         hubStatusSubtitle.setPadding(0, 0, 0, dp(16));
         content.addView(hubStatusSubtitle);
 
-        // 1. Primary Action: Resume Browser
         content.addView(makeHubCard(
                 "🌐  Open Ashport Browser",
                 "Return to your active game tabs and live session",
@@ -305,7 +294,6 @@ public class MainActivity extends Activity {
                 v -> showBrowser()
         ));
 
-        // 2. Dynamic Link Catching Warning Card (Auto-hidden once enabled)
         linkCardContainer = new LinearLayout(this);
         linkCardContainer.setOrientation(LinearLayout.VERTICAL);
         int cPad = dp(14);
@@ -331,10 +319,8 @@ public class MainActivity extends Activity {
         updateLinkStatusCardUI(isAshportLinkHandlingEnabled());
         content.addView(linkCardContainer);
 
-        // 3. Native Built-in Timers Dashboard & Encrypted API Key Vault
         content.addView(apiTimerManager.buildDashboardView());
 
-        // 4. Userscripts & Shortcuts Cards
         content.addView(makeHubCard(
                 "📜  User Scripts Manager",
                 "Toggle, edit, paste, or install .user.js scripts from URL",
@@ -356,7 +342,6 @@ public class MainActivity extends Activity {
                 })
         ));
 
-        // 5. App Updates Card
         content.addView(makeHubCard(
                 "⬇  App Updates (v" + (autoUpdater != null ? autoUpdater.getCurrentVersionName() : "1.0.0") + ")",
                 "Tap to check GitHub Releases for a newer Ashport Pass APK",
@@ -935,6 +920,20 @@ public class MainActivity extends Activity {
         }
     }
 
+    private String globToJsRegex(String glob) {
+        if (glob == null || glob.trim().isEmpty() || "*".equals(glob.trim())) return ".*";
+        StringBuilder sb = new StringBuilder("^");
+        for (int i = 0; i < glob.length(); i++) {
+            char c = glob.charAt(i);
+            if (c == '*') sb.append(".*");
+            else if (c == '?') sb.append(".");
+            else if ("\\.[]{}()+-^$|".indexOf(c) != -1) sb.append("\\").append(c);
+            else sb.append(c);
+        }
+        sb.append("$");
+        return sb.toString();
+    }
+
     private void attachScriptsToTab(BrowserTab tab) {
         if (!WebViewFeature.isFeatureSupported(WebViewFeature.DOCUMENT_START_SCRIPT)) return;
 
@@ -958,11 +957,14 @@ public class MainActivity extends Activity {
             boolean isDocStart = "document-start".equalsIgnoreCase(script.runAt) ||
                     (script.code.contains("@run-at") && script.code.contains("document-start"));
 
+            String regexStr = globToJsRegex(script.matchPattern);
+            String matchGuard = "if (!(new RegExp(" + JSONObject.quote(regexStr) + ", 'i').test(window.location.href))) return;\n";
+
             String wrapped;
             if (isDocStart) {
-                wrapped = "(function() {\n" + script.code + "\n})();";
+                wrapped = "(function() {\n" + matchGuard + script.code + "\n})();";
             } else {
-                wrapped = "(function() {\n" +
+                wrapped = "(function() {\n" + matchGuard +
                         "  function __run() {\n" + script.code + "\n  }\n" +
                         "  if (document.readyState === 'loading') {\n" +
                         "    document.addEventListener('DOMContentLoaded', __run, { once: true });\n" +

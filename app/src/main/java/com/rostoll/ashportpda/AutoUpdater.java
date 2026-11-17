@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.pm.PackageInfo;
+import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
@@ -171,6 +172,8 @@ public class AutoUpdater {
         ProgressBar bar = new ProgressBar(activity, null, android.R.attr.progressBarStyleHorizontal);
         bar.setMax(100);
         bar.setProgress(0);
+        bar.setProgressTintList(ColorStateList.valueOf(Color.parseColor("#f2851d")));
+        bar.setProgressBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#263c4f")));
         box.addView(bar, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
 

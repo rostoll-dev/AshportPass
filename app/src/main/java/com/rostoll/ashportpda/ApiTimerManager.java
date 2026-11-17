@@ -12,6 +12,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.content.res.ColorStateList;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
@@ -52,7 +53,9 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -96,6 +99,24 @@ public class ApiTimerManager {
         }
     }
 
+    private static class DynamicTargetView {
+        final TextView rightTv;
+        final long targetMs;
+        final String activePrefix;
+        final String readyText;
+        final String activeColor;
+        final String readyColor;
+
+        DynamicTargetView(TextView rightTv, long targetMs, String activePrefix, String readyText, String activeColor, String readyColor) {
+            this.rightTv = rightTv;
+            this.targetMs = targetMs;
+            this.activePrefix = activePrefix;
+            this.readyText = readyText;
+            this.activeColor = activeColor;
+            this.readyColor = readyColor;
+        }
+    }
+
     private final Activity activity;
     private final SecureKeyStore keyStore;
     private final SharedPreferences prefs;
@@ -112,12 +133,17 @@ public class ApiTimerManager {
     private TextView keyStatusBadge;
     private TextView syncStatusText;
     private LinearLayout liveContentBox;
+    private final List<DynamicTargetView> dynamicTargets = new ArrayList<>();
 
     private final Runnable uiTicker = new Runnable() {
         @Override
         public void run() {
             if (dashboardContainer != null && dashboardContainer.isShown() && lastTimersJson != null) {
-                renderTimersContent();
+                if (dynamicTargets.isEmpty() && liveContentBox != null && liveContentBox.getChildCount() == 0) {
+                    renderTimersContent();
+                } else {
+                    updateTimersValuesInPlace();
+                }
             }
             tickHandler.postDelayed(this, 1000L);
         }
@@ -146,6 +172,7 @@ public class ApiTimerManager {
 
     public void startTicker() {
         loadCachedData();
+        renderTimersContent();
         tickHandler.removeCallbacks(uiTicker);
         tickHandler.post(uiTicker);
         if (keyStore.hasApiKey() && (System.currentTimeMillis() - lastFetchLocalMs > 20000L)) {
@@ -590,9 +617,23 @@ public class ApiTimerManager {
         throw lastErr != null ? lastErr : new Exception("Failed to reach Ashport API");
     }
 
+    private void updateTimersValuesInPlace() {
+        long nowMs = System.currentTimeMillis() + serverTimeOffsetMs;
+        for (DynamicTargetView dtv : dynamicTargets) {
+            if (dtv.targetMs > nowMs) {
+                dtv.rightTv.setText(dtv.activePrefix + formatDuration(dtv.targetMs - nowMs));
+                dtv.rightTv.setTextColor(Color.parseColor(dtv.activeColor));
+            } else {
+                dtv.rightTv.setText(dtv.readyText);
+                dtv.rightTv.setTextColor(Color.parseColor(dtv.readyColor));
+            }
+        }
+    }
+
     private void renderTimersContent() {
         if (liveContentBox == null) return;
         liveContentBox.removeAllViews();
+        dynamicTargets.clear();
 
         if (lastTimersJson == null) return;
 
@@ -620,14 +661,16 @@ public class ApiTimerManager {
                 String destName = travelObj.optString("name", travelObj.optString("dest", "Abroad"));
                 String dir = "home".equalsIgnoreCase(travelObj.optString("dir")) ? "Returning from " : "Flying to ";
                 long landsAt = travelObj.optLong("landsAt", 0L);
-                String landStr = landsAt > nowMs ? "Lands in " + formatDuration(landsAt - nowMs) : "Landed (" + destName + ")";
-                alertCard.addView(makeRowText("✈️  " + dir + destName, landStr, "#64b5f6"));
+                alertCard.addView(makeDynamicRowText("✈️  " + dir + destName, landsAt, nowMs,
+                        "Lands in ", "Landed (" + destName + ")", "#64b5f6", "#69f0ae"));
             }
             if (hospUntil > nowMs) {
-                alertCard.addView(makeRowText("🏥  Hospitalized", formatDuration(hospUntil - nowMs), "#ff8a80"));
+                alertCard.addView(makeDynamicRowText("🏥  Hospitalized", hospUntil, nowMs,
+                        "", "OUT", "#ff8a80", "#69f0ae"));
             }
             if (jailUntil > nowMs) {
-                alertCard.addView(makeRowText("⛓  In Jail", formatDuration(jailUntil - nowMs), "#ffd180"));
+                alertCard.addView(makeDynamicRowText("⛓  In Jail", jailUntil, nowMs,
+                        "", "OUT", "#ffd180", "#69f0ae"));
             }
             if (!statusReason.isEmpty() && hospUntil <= nowMs && jailUntil <= nowMs && travelObj == null) {
                 alertCard.addView(makeRowText("Status: " + statusKind.toUpperCase(Locale.US), statusReason, "#ffb74d"));
@@ -690,7 +733,8 @@ public class ApiTimerManager {
 
         long newDayAt = lastTimersJson.optLong("newDayAt", 0L);
         if (newDayAt > nowMs) {
-            timersCard.addView(makeRowText("🌅 Next New Day", formatDuration(newDayAt - nowMs), "#90caf9"));
+            timersCard.addView(makeDynamicRowText("🌅 Next New Day", newDayAt, nowMs,
+                    "", "NOW", "#90caf9", "#69f0ae"));
         }
 
         JSONArray buffs = lastTimersJson.optJSONArray("buffs");
@@ -701,7 +745,8 @@ public class ApiTimerManager {
                 long until = b.optLong("until", 0L);
                 if (until > nowMs) {
                     String label = b.optString("label", b.optString("k", "Buff"));
-                    timersCard.addView(makeRowText("✨ " + label, formatDuration(until - nowMs), "#ce93d8"));
+                    timersCard.addView(makeDynamicRowText("✨ " + label, until, nowMs,
+                            "", "EXPIRED", "#ce93d8", "#78909c"));
                 }
             }
         }
@@ -722,25 +767,49 @@ public class ApiTimerManager {
         wLp.bottomMargin = dp(8);
         wrap.setLayoutParams(wLp);
 
-        String rightStatus = (fullAt > nowMs) ? "Full in " + formatDuration(fullAt - nowMs) : "FULL";
-        wrap.addView(makeRowText(label + "  (" + val + "/" + max + ")", rightStatus,
-                (fullAt > nowMs) ? "#b0bec5" : colorHex));
+        wrap.addView(makeDynamicRowText(label + "  (" + val + "/" + max + ")", fullAt, nowMs,
+                "Full in ", "FULL", "#b0bec5", colorHex));
 
         ProgressBar pb = new ProgressBar(activity, null, android.R.attr.progressBarStyleHorizontal);
         pb.setMax(max);
         pb.setProgress(Math.min(val, max));
-        pb.getProgressDrawable().setColorFilter(Color.parseColor(colorHex), PorterDuff.Mode.SRC_IN);
+        pb.setProgressTintList(ColorStateList.valueOf(Color.parseColor(colorHex)));
+        pb.setProgressBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#263c4f")));
         wrap.addView(pb, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(8)));
 
         parent.addView(wrap);
     }
 
     private View makeTimerLine(String label, long targetAtMs, long nowMs) {
-        if (targetAtMs > nowMs) {
-            return makeRowText(label, formatDuration(targetAtMs - nowMs), "#ffb74d");
-        } else {
-            return makeRowText(label, "READY", "#69f0ae");
-        }
+        return makeDynamicRowText(label, targetAtMs, nowMs, "", "READY", "#ffb74d", "#69f0ae");
+    }
+
+    private View makeDynamicRowText(String left, long targetMs, long nowMs,
+                                    String activePrefix, String readyText,
+                                    String activeColorHex, String readyColorHex) {
+        boolean isActive = targetMs > nowMs;
+        String initialRight = isActive ? (activePrefix + formatDuration(targetMs - nowMs)) : readyText;
+        String initialColor = isActive ? activeColorHex : readyColorHex;
+
+        LinearLayout row = new LinearLayout(activity);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setPadding(0, dp(3), 0, dp(3));
+
+        TextView lTv = new TextView(activity);
+        lTv.setText(left);
+        lTv.setTextColor(Color.WHITE);
+        lTv.setTextSize(13f);
+        row.addView(lTv, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+
+        TextView rTv = new TextView(activity);
+        rTv.setText(initialRight);
+        rTv.setTextColor(Color.parseColor(initialColor));
+        rTv.setTextSize(13f);
+        rTv.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
+        row.addView(rTv);
+
+        dynamicTargets.add(new DynamicTargetView(rTv, targetMs, activePrefix, readyText, activeColorHex, readyColorHex));
+        return row;
     }
 
     private View makeRowText(String left, String right, String rightColorHex) {
@@ -1232,6 +1301,14 @@ public class ApiTimerManager {
                     PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
             am.cancel(hbPi);
             scheduleProgressTickAlarm(context, false);
+
+            for (int id = 101; id <= 111; id++) {
+                Intent tIntent = new Intent(context, TimerAlarmReceiver.class);
+                tIntent.setAction(TimerAlarmReceiver.ACTION_TIMER_ALARM);
+                PendingIntent tPi = PendingIntent.getBroadcast(context, id, tIntent,
+                        PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+                am.cancel(tPi);
+            }
         }
         if (nm != null) {
             nm.cancelAll();

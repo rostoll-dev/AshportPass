@@ -2,6 +2,12 @@ plugins {
     id 'com.android.application'
 }
 
+def localProps = new Properties()
+def localPropsFile = rootProject.file('local.properties')
+if (localPropsFile.exists()) {
+    localPropsFile.withInputStream { localProps.load(it) }
+}
+
 android {
     namespace 'com.rostoll.ashportpda'
     compileSdk 34
@@ -10,35 +16,36 @@ android {
         applicationId "com.rostoll.ashportpda"
         minSdk 26
         targetSdk 34
-        versionCode 14
-        versionName "1.2"
+        versionCode 16
+        versionName "1.2.1"
     }
 
     signingConfigs {
         release {
-            storeFile file("/data/data/com.termux/files/home/ashport-pass.keystore")
-            storePassword "AshportPassSecret2026"
-            keyAlias "ashportpass"
-            keyPassword "AshportPassSecret2026"
+            storeFile file(localProps.getProperty('RELEASE_STORE_FILE', System.getProperty("user.home") + "/ashport-pass.keystore"))
+            storePassword localProps.getProperty('RELEASE_STORE_PASSWORD', '')
+            keyAlias localProps.getProperty('RELEASE_KEY_ALIAS', 'ashportkey')
+            keyPassword localProps.getProperty('RELEASE_KEY_PASSWORD', '')
         }
     }
 
     buildTypes {
-        debug {
-            signingConfig signingConfigs.release
-        }
         release {
+            signingConfig signingConfigs.release
             minifyEnabled false
+        }
+        debug {
             signingConfig signingConfigs.release
         }
     }
 
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_17
-        targetCompatibility JavaVersion.VERSION_17
+        sourceCompatibility JavaVersion.VERSION_11
+        targetCompatibility JavaVersion.VERSION_11
     }
 }
 
 dependencies {
     implementation 'androidx.webkit:webkit:1.11.0'
+    implementation 'androidx.core:core:1.13.1'
 }
