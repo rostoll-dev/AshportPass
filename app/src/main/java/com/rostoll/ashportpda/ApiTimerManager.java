@@ -67,15 +67,15 @@ public class ApiTimerManager {
 
     private static final String[][] TIMER_CONFIGS = {
             {"108", "notify_travel",  "live_travel",  "true",  "✈️ Flight / Travel"},
-            {"109", "notify_status",  "live_status",  "false", "🏥 Hospital / Jail"},
-            {"105", "notify_drug",    "live_drug",    "false", "💊 Drug Cooldown"},
+            {"109", "notify_status",  "live_status",  "true",  "🏥 Hospital / Jail"},
+            {"105", "notify_drug",    "live_drug",    "true",  "💊 Drug Cooldown"},
             {"106", "notify_booster", "live_booster", "false", "🚀 Booster Cooldown"},
             {"107", "notify_medical", "live_medical", "false", "🩹 Medical Cooldown"},
             {"101", "notify_energy",  "live_energy",  "false", "⚡ Energy Bar"},
             {"102", "notify_nerve",   "live_nerve",   "false", "🔥 Nerve Bar"},
             {"103", "notify_health",  "live_health",  "false", "❤️ Health Bar"},
             {"104", "notify_mood",    "live_mood",    "false", "😊 Mood Bar"},
-            {"110", "notify_course",  "live_course",  "false", "🎓 Education Course"},
+            {"110", "notify_course",  "live_course",  "true",  "🎓 Education Course"},
             {"111", "notify_bank",    "live_bank",    "false", "🏦 Bank Investment"}
     };
 
@@ -127,29 +127,9 @@ public class ApiTimerManager {
         this.activity = activity;
         this.keyStore = new SecureKeyStore(activity);
         this.prefs = activity.getSharedPreferences(PREFS_CACHE, Context.MODE_PRIVATE);
-        migrateSingleLiveDefaultIfNeeded();
         loadCachedData();
         if (keyStore.hasApiKey()) {
             scheduleBackgroundHeartbeat(activity);
-        }
-    }
-
-    private void migrateSingleLiveDefaultIfNeeded() {
-        if (!prefs.getBoolean("migrated_promoted_single_v1", false)) {
-            prefs.edit()
-                    .putBoolean("migrated_promoted_single_v1", true)
-                    .putBoolean("live_travel", true)
-                    .putBoolean("live_status", false)
-                    .putBoolean("live_drug", false)
-                    .putBoolean("live_booster", false)
-                    .putBoolean("live_medical", false)
-                    .putBoolean("live_energy", false)
-                    .putBoolean("live_nerve", false)
-                    .putBoolean("live_health", false)
-                    .putBoolean("live_mood", false)
-                    .putBoolean("live_course", false)
-                    .putBoolean("live_bank", false)
-                    .apply();
         }
     }
 
@@ -385,7 +365,7 @@ public class ApiTimerManager {
         scroll.addView(layout);
 
         TextView legend = new TextView(activity);
-        legend.setText("Choose per timer:\n• ⏱ Live: Pins an Android 16 Promoted ProgressStyle card with its custom status icon (keep only 1 active to prevent Android group arrows!).\n• 🔔 Alert: Vibrates & notifies you when the timer hits 00:00.");
+        legend.setText("Choose per timer:\n• ⏱ Live: Pins a permanent full-size notification with its custom status icon.\n• 🔔 Alert: Vibrates & notifies you when the timer hits 00:00.");
         legend.setTextColor(Color.parseColor("#90a4ae"));
         legend.setTextSize(12f);
         legend.setPadding(0, 0, 0, dp(10));
@@ -825,7 +805,7 @@ public class ApiTimerManager {
 
         JSONObject cds = t.optJSONObject("cooldowns");
         if (cds != null) {
-            anyLiveActive |= handleTimerEntryStatic(context, prefs, 105, "notify_drug", "live_drug", false,
+            anyLiveActive |= handleTimerEntryStatic(context, prefs, 105, "notify_drug", "live_drug", true,
                     cds.optLong("drug", 0L), 0L, nowServer,
                     "💊 Drug Cooldown Ready", "Your drug cooldown has ended.",
                     "Drug Cooldown Active", "Waiting for substance effects to clear.", "#f48fb1");
@@ -863,14 +843,14 @@ public class ApiTimerManager {
         JSONObject statusObj = t.optJSONObject("status");
         String statusReason = statusObj != null ? statusObj.optString("reason", "") : "";
 
-        anyLiveActive |= handleTimerEntryStatic(context, prefs, 109, "notify_status", "live_status", false,
+        anyLiveActive |= handleTimerEntryStatic(context, prefs, 109, "notify_status", "live_status", true,
                 statusUntil, 0L, nowServer,
                 isJail ? "⛓ Released from Jail!" : "🏥 Released from Hospital!",
                 "You are out and ready for action in Ashport.",
                 isJail ? "Currently in Jail" : "Currently Hospitalized",
                 !statusReason.isEmpty() ? statusReason : "Resting until discharge.", "#ffb74d");
 
-        anyLiveActive |= handleTimerEntryStatic(context, prefs, 110, "notify_course", "live_course", false,
+        anyLiveActive |= handleTimerEntryStatic(context, prefs, 110, "notify_course", "live_course", true,
                 t.optLong("courseEndsAt", 0L), 0L, nowServer,
                 "🎓 Course Completed", "Your Ashport education course has finished!",
                 "Education Course in Progress", "Studying current curriculum module.", "#90caf9");

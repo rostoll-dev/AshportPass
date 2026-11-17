@@ -1,0 +1,975 @@
+{
+  "/v1/faction/1": {
+    "faction": {
+      "id": 1,
+      "name": "Down to Fight",
+      "tag": "DTF",
+      "description": "[Down To Fight]\nWe have the high ground.\n\n\u2699\ufe0f PEACETIME PERKS\n\u2022 Crime Cash: +2%\n\n\u2022 Travel Capacity: +1 Carry\n\n\u2022 Gym Gains: +4.5%\n\n\u2022 Addiction Reduction: -15%\n\n\u2022 Booster cooldown: +2 hours\n\n\u2694\ufe0f WAR MODE PERKS\n\u2022 Stat Boost: +2% Power | +2% Agility | +2% Guard | +2% Finesse\n\n\ud83c\udfaf RECRUITMENT STATUS: Open / By Application",
+      "leaderId": 101,
+      "respect": 3984.800000000001,
+      "chain": 0,
+      "chainExpires": 1794798051774,
+      "chainBest": 34,
+      "warRating": 1011.7471336336108,
+      "createdAt": 1794059820166
+    },
+    "members": [
+      {
+        "id": 101,
+        "name": "Ashwalker",
+        "level": 28,
+        "status": "ok",
+        "travel": null,
+        "faction": {
+          "id": 1,
+          "name": "Down to Fight",
+          "tag": "DTF"
+        },
+        "lastActionAt": 1794795924494,
+        "createdAt": 1794057758171
+      },
+      {
+        "id": 113,
+        "name": "Glayshu",
+        "level": 15,
+        "status": "ok",
+        "travel": null,
+        "faction": {
+          "id": 1,
+          "name": "Down to Fight",
+          "tag": "DTF"
+        },
+        "lastActionAt": 1794784780581,
+        "createdAt": 1794115156949
+      },
+      {
+        "id": 126,
+        "name": "N-one-R",
+        "level": 10,
+        "status": "ok",
+        "travel": null,
+        "faction": {
+          "id": 1,
+          "name": "Down to Fight",
+          "tag": "DTF"
+        },
+        "lastActionAt": 1794810345958,
+        "createdAt": 1794404866755
+      },
+      {
+        "id": 147,
+        "name": "James",
+        "level": 9,
+        "status": "ok",
+        "travel": null,
+        "faction": {
+          "id": 1,
+          "name": "Down to Fight",
+          "tag": "DTF"
+        },
+        "lastActionAt": 1794783273370,
+        "createdAt": 1794430423006
+      },
+      {
+        "id": 127,
+        "name": "Shmichael",
+        "level": 8,
+        "status": "ok",
+        "travel": null,
+        "faction": {
+          "id": 1,
+          "name": "Down to Fight",
+          "tag": "DTF"
+        },
+        "lastActionAt": 1794792004150,
+        "createdAt": 1794404950593
+      },
+      {
+        "id": 157,
+        "name": "Inferno",
+        "level": 8,
+        "status": "ok",
+        "travel": null,
+        "faction": {
+          "id": 1,
+          "name": "Down to Fight",
+          "tag": "DTF"
+        },
+        "lastActionAt": 1794801020772,
+        "createdAt": 1794510971717
+      },
+      {
+        "id": 128,
+        "name": "MikeTheHat",
+        "level": 7,
+        "status": "ok",
+        "travel": null,
+        "faction": {
+          "id": 1,
+          "name": "Down to Fight",
+          "tag": "DTF"
+        },
+        "lastActionAt": 1794787942928,
+        "createdAt": 1794404980197
+      },
+      {
+        "id": 123,
+        "name": "TiMazing",
+        "level": 4,
+        "status": "ok",
+        "travel": null,
+        "faction": {
+          "id": 1,
+          "name": "Down to Fight",
+          "tag": "DTF"
+        },
+        "lastActionAt": 1794803010562,
+        "createdAt": 1794326202992
+      },
+      {
+        "id": 129,
+        "name": "Harleytunes",
+        "level": 3,
+        "status": "ok",
+        "travel": null,
+        "faction": {
+          "id": 1,
+          "name": "Down to Fight",
+          "tag": "DTF"
+        },
+        "lastActionAt": 1794431712199,
+        "createdAt": 1794405653148
+      },
+      {
+        "id": 135,
+        "name": "Sunny21",
+        "level": 3,
+        "status": "ok",
+        "travel": null,
+        "faction": {
+          "id": 1,
+          "name": "Down to Fight",
+          "tag": "DTF"
+        },
+        "lastActionAt": 1794679926378,
+        "createdAt": 1794418442199
+      },
+      {
+        "id": 151,
+        "name": "Daffodil",
+        "level": 1,
+        "status": "ok",
+        "travel": null,
+        "faction": {
+          "id": 1,
+          "name": "Down to Fight",
+          "tag": "DTF"
+        },
+        "lastActionAt": 1794451672851,
+        "createdAt": 1794449888645
+      }
+    ]
+  },
+  "/v1/faction/2": {
+    "faction": {
+      "id": 2,
+      "name": "Zero Tolerance",
+      "tag": "ZERO",
+      "description": "We support our crew, bring the good vibes, and have zero patience for haters. If you\u2019re here to play hard and have fun, welcome aboard!\n\nDiscord Required\nhttps://discord.gg/Nh3yZN57Fn\n\nFaction Perks (Peace Time):\n+2% crime cash\n -3% jail time\n -4% bail\n +1 travel carry\n +6% gym gains\n -15% addiction\n-5% Flight Time\n+3 Hour Med Cooldown\n+2 Hour Booster Cooldown\n+3 Revive Skil\n\nFaction Perks (War Time):\n+2% Power\n+2% Agility\n+2% Guard\n+2% Finesse\n+15s chain timer\n-3% hospital time\n-2% med cooldown",
+      "leaderId": 103,
+      "respect": 6158.899999999996,
+      "chain": 0,
+      "chainExpires": 1794806780088,
+      "chainBest": 78,
+      "warRating": 988.2528663663891,
+      "createdAt": 1794059927329
+    },
+    "members": [
+      {
+        "id": 103,
+        "name": "Zero",
+        "level": 13,
+        "status": "abroad",
+        "travel": {
+          "dest": "kestrel",
+          "name": "Kestrel Isles",
+          "dir": "abroad",
+          "landsAt": null
+        },
+        "faction": {
+          "id": 2,
+          "name": "Zero Tolerance",
+          "tag": "ZERO"
+        },
+        "lastActionAt": 1794797675909,
+        "createdAt": 1794058365943
+      },
+      {
+        "id": 109,
+        "name": "Xatruo",
+        "level": 13,
+        "status": "ok",
+        "travel": null,
+        "faction": {
+          "id": 2,
+          "name": "Zero Tolerance",
+          "tag": "ZERO"
+        },
+        "lastActionAt": 1794806583223,
+        "createdAt": 1794099291369
+      },
+      {
+        "id": 102,
+        "name": "Rostoll",
+        "level": 12,
+        "status": "ok",
+        "travel": null,
+        "faction": {
+          "id": 2,
+          "name": "Zero Tolerance",
+          "tag": "ZERO"
+        },
+        "lastActionAt": 1794810393456,
+        "createdAt": 1794057851188
+      },
+      {
+        "id": 105,
+        "name": "DragonessTrueborn",
+        "level": 12,
+        "status": "ok",
+        "travel": null,
+        "faction": {
+          "id": 2,
+          "name": "Zero Tolerance",
+          "tag": "ZERO"
+        },
+        "lastActionAt": 1794811211175,
+        "createdAt": 1794063254038
+      },
+      {
+        "id": 112,
+        "name": "pentest",
+        "level": 12,
+        "status": "flying",
+        "travel": {
+          "dest": "mercy_cay",
+          "name": "Mercy Cay",
+          "dir": "home",
+          "landsAt": 1794813197842
+        },
+        "faction": {
+          "id": 2,
+          "name": "Zero Tolerance",
+          "tag": "ZERO"
+        },
+        "lastActionAt": 1794811406721,
+        "createdAt": 1794112852754
+      },
+      {
+        "id": 106,
+        "name": "closeyourlaptop",
+        "level": 10,
+        "status": "ok",
+        "travel": null,
+        "faction": {
+          "id": 2,
+          "name": "Zero Tolerance",
+          "tag": "ZERO"
+        },
+        "lastActionAt": 1794807110301,
+        "createdAt": 1794067620743
+      },
+      {
+        "id": 107,
+        "name": "Daza",
+        "level": 8,
+        "status": "ok",
+        "travel": null,
+        "faction": {
+          "id": 2,
+          "name": "Zero Tolerance",
+          "tag": "ZERO"
+        },
+        "lastActionAt": 1794805828747,
+        "createdAt": 1794067957366
+      },
+      {
+        "id": 122,
+        "name": "Plagueflowers",
+        "level": 8,
+        "status": "ok",
+        "travel": null,
+        "faction": {
+          "id": 2,
+          "name": "Zero Tolerance",
+          "tag": "ZERO"
+        },
+        "lastActionAt": 1794802626540,
+        "createdAt": 1794312771109
+      },
+      {
+        "id": 124,
+        "name": "CilantroCore",
+        "level": 8,
+        "status": "ok",
+        "travel": null,
+        "faction": {
+          "id": 2,
+          "name": "Zero Tolerance",
+          "tag": "ZERO"
+        },
+        "lastActionAt": 1794785954926,
+        "createdAt": 1794347024842
+      },
+      {
+        "id": 125,
+        "name": "Xerox",
+        "level": 8,
+        "status": "ok",
+        "travel": null,
+        "faction": {
+          "id": 2,
+          "name": "Zero Tolerance",
+          "tag": "ZERO"
+        },
+        "lastActionAt": 1794804927303,
+        "createdAt": 1794404469049
+      },
+      {
+        "id": 138,
+        "name": "MorganCarter",
+        "level": 8,
+        "status": "ok",
+        "travel": null,
+        "faction": {
+          "id": 2,
+          "name": "Zero Tolerance",
+          "tag": "ZERO"
+        },
+        "lastActionAt": 1794808813447,
+        "createdAt": 1794426849779
+      },
+      {
+        "id": 152,
+        "name": "EXP",
+        "level": 8,
+        "status": "flying",
+        "travel": {
+          "dest": "kestrel",
+          "name": "Kestrel Isles",
+          "dir": "home",
+          "landsAt": 1794813495825
+        },
+        "faction": {
+          "id": 2,
+          "name": "Zero Tolerance",
+          "tag": "ZERO"
+        },
+        "lastActionAt": 1794811215825,
+        "createdAt": 1794451315175
+      },
+      {
+        "id": 117,
+        "name": "eve_laura_nana",
+        "level": 7,
+        "status": "ok",
+        "travel": null,
+        "faction": {
+          "id": 2,
+          "name": "Zero Tolerance",
+          "tag": "ZERO"
+        },
+        "lastActionAt": 1794740970847,
+        "createdAt": 1794230039743
+      },
+      {
+        "id": 119,
+        "name": "marielle03",
+        "level": 7,
+        "status": "ok",
+        "travel": null,
+        "faction": {
+          "id": 2,
+          "name": "Zero Tolerance",
+          "tag": "ZERO"
+        },
+        "lastActionAt": 1794761225752,
+        "createdAt": 1794238728107
+      },
+      {
+        "id": 159,
+        "name": "Herlims",
+        "level": 7,
+        "status": "ok",
+        "travel": null,
+        "faction": {
+          "id": 2,
+          "name": "Zero Tolerance",
+          "tag": "ZERO"
+        },
+        "lastActionAt": 1794809521288,
+        "createdAt": 1794604650456
+      },
+      {
+        "id": 111,
+        "name": "Dragonrider86",
+        "level": 5,
+        "status": "ok",
+        "travel": null,
+        "faction": {
+          "id": 2,
+          "name": "Zero Tolerance",
+          "tag": "ZERO"
+        },
+        "lastActionAt": 1794751693352,
+        "createdAt": 1794108484035
+      },
+      {
+        "id": 114,
+        "name": "DeathWeaver",
+        "level": 5,
+        "status": "ok",
+        "travel": null,
+        "faction": {
+          "id": 2,
+          "name": "Zero Tolerance",
+          "tag": "ZERO"
+        },
+        "lastActionAt": 1794769505563,
+        "createdAt": 1794143366439
+      },
+      {
+        "id": 115,
+        "name": "Wit_The_Slut",
+        "level": 5,
+        "status": "ok",
+        "travel": null,
+        "faction": {
+          "id": 2,
+          "name": "Zero Tolerance",
+          "tag": "ZERO"
+        },
+        "lastActionAt": 1794530839244,
+        "createdAt": 1794148223698
+      },
+      {
+        "id": 130,
+        "name": "Nimue",
+        "level": 5,
+        "status": "ok",
+        "travel": null,
+        "faction": {
+          "id": 2,
+          "name": "Zero Tolerance",
+          "tag": "ZERO"
+        },
+        "lastActionAt": 1794424258259,
+        "createdAt": 1794408261630
+      },
+      {
+        "id": 156,
+        "name": "Sound",
+        "level": 3,
+        "status": "ok",
+        "travel": null,
+        "faction": {
+          "id": 2,
+          "name": "Zero Tolerance",
+          "tag": "ZERO"
+        },
+        "lastActionAt": 1794777064137,
+        "createdAt": 1794496606989
+      },
+      {
+        "id": 133,
+        "name": "Zack0309",
+        "level": 2,
+        "status": "ok",
+        "travel": null,
+        "faction": {
+          "id": 2,
+          "name": "Zero Tolerance",
+          "tag": "ZERO"
+        },
+        "lastActionAt": 1794510667600,
+        "createdAt": 1794415734261
+      }
+    ]
+  },
+  "/v1/faction/3": {
+    "faction": {
+      "id": 3,
+      "name": "Unbroken Misfits",
+      "tag": "UM",
+      "description": "Just a chill faction or sommat, really hope i can change this\n\nPerks for now:\n\n+1 Grit\n+3% med strength\n+3 revive skill\n+3% gym gains\n-10% addiction",
+      "leaderId": 150,
+      "respect": 875.6999999999997,
+      "chain": 0,
+      "chainExpires": 1794805738464,
+      "chainBest": 82,
+      "warRating": 1000,
+      "createdAt": 1794706892586
+    },
+    "members": [
+      {
+        "id": 150,
+        "name": "Username",
+        "level": 11,
+        "status": "flying",
+        "travel": {
+          "dest": "kestrel",
+          "name": "Kestrel Isles",
+          "dir": "home",
+          "landsAt": 1794811861490
+        },
+        "faction": {
+          "id": 3,
+          "name": "Unbroken Misfits",
+          "tag": "UM"
+        },
+        "lastActionAt": 1794809581490,
+        "createdAt": 1794445775461
+      },
+      {
+        "id": 131,
+        "name": "telepathicoreo",
+        "level": 10,
+        "status": "ok",
+        "travel": null,
+        "faction": {
+          "id": 3,
+          "name": "Unbroken Misfits",
+          "tag": "UM"
+        },
+        "lastActionAt": 1794805757796,
+        "createdAt": 1794408878335
+      },
+      {
+        "id": 149,
+        "name": "Lolth",
+        "level": 10,
+        "status": "ok",
+        "travel": null,
+        "faction": {
+          "id": 3,
+          "name": "Unbroken Misfits",
+          "tag": "UM"
+        },
+        "lastActionAt": 1794800229832,
+        "createdAt": 1794445197265
+      },
+      {
+        "id": 158,
+        "name": "Bobb",
+        "level": 7,
+        "status": "ok",
+        "travel": null,
+        "faction": {
+          "id": 3,
+          "name": "Unbroken Misfits",
+          "tag": "UM"
+        },
+        "lastActionAt": 1794806029661,
+        "createdAt": 1794587118646
+      }
+    ]
+  },
+  "/v1/faction/members": {
+    "factionId": 2,
+    "members": [
+      {
+        "id": 103,
+        "name": "Zero",
+        "level": 13,
+        "status": "abroad",
+        "travel": {
+          "dest": "kestrel",
+          "name": "Kestrel Isles",
+          "dir": "abroad",
+          "landsAt": null
+        },
+        "faction": {
+          "id": 2,
+          "name": "Zero Tolerance",
+          "tag": "ZERO"
+        },
+        "lastActionAt": 1794797675909,
+        "createdAt": 1794058365943,
+        "role": "Leader",
+        "isLeader": true,
+        "joinedAt": 1794059927329,
+        "statusUntil": null
+      },
+      {
+        "id": 109,
+        "name": "Xatruo",
+        "level": 13,
+        "status": "ok",
+        "travel": null,
+        "faction": {
+          "id": 2,
+          "name": "Zero Tolerance",
+          "tag": "ZERO"
+        },
+        "lastActionAt": 1794806583223,
+        "createdAt": 1794099291369,
+        "role": "Member",
+        "isLeader": false,
+        "joinedAt": 1794099842783,
+        "statusUntil": null
+      },
+      {
+        "id": 102,
+        "name": "Rostoll",
+        "level": 12,
+        "status": "ok",
+        "travel": null,
+        "faction": {
+          "id": 2,
+          "name": "Zero Tolerance",
+          "tag": "ZERO"
+        },
+        "lastActionAt": 1794810393456,
+        "createdAt": 1794057851188,
+        "role": "Research & Development",
+        "isLeader": false,
+        "joinedAt": 1794060611501,
+        "statusUntil": null
+      },
+      {
+        "id": 105,
+        "name": "DragonessTrueborn",
+        "level": 12,
+        "status": "ok",
+        "travel": null,
+        "faction": {
+          "id": 2,
+          "name": "Zero Tolerance",
+          "tag": "ZERO"
+        },
+        "lastActionAt": 1794811211175,
+        "createdAt": 1794063254038,
+        "role": "Co-Leader",
+        "isLeader": false,
+        "joinedAt": 1794063317372,
+        "statusUntil": null
+      },
+      {
+        "id": 112,
+        "name": "pentest",
+        "level": 12,
+        "status": "flying",
+        "travel": {
+          "dest": "mercy_cay",
+          "name": "Mercy Cay",
+          "dir": "home",
+          "landsAt": 1794813197842
+        },
+        "faction": {
+          "id": 2,
+          "name": "Zero Tolerance",
+          "tag": "ZERO"
+        },
+        "lastActionAt": 1794811406721,
+        "createdAt": 1794112852754,
+        "role": "Member",
+        "isLeader": false,
+        "joinedAt": 1794114244313,
+        "statusUntil": null
+      },
+      {
+        "id": 106,
+        "name": "closeyourlaptop",
+        "level": 10,
+        "status": "ok",
+        "travel": null,
+        "faction": {
+          "id": 2,
+          "name": "Zero Tolerance",
+          "tag": "ZERO"
+        },
+        "lastActionAt": 1794807110301,
+        "createdAt": 1794067620743,
+        "role": "Member",
+        "isLeader": false,
+        "joinedAt": 1794067890029,
+        "statusUntil": null
+      },
+      {
+        "id": 107,
+        "name": "Daza",
+        "level": 8,
+        "status": "ok",
+        "travel": null,
+        "faction": {
+          "id": 2,
+          "name": "Zero Tolerance",
+          "tag": "ZERO"
+        },
+        "lastActionAt": 1794805828747,
+        "createdAt": 1794067957366,
+        "role": "Member",
+        "isLeader": false,
+        "joinedAt": 1794240160033,
+        "statusUntil": null
+      },
+      {
+        "id": 122,
+        "name": "Plagueflowers",
+        "level": 8,
+        "status": "ok",
+        "travel": null,
+        "faction": {
+          "id": 2,
+          "name": "Zero Tolerance",
+          "tag": "ZERO"
+        },
+        "lastActionAt": 1794802626540,
+        "createdAt": 1794312771109,
+        "role": "Member",
+        "isLeader": false,
+        "joinedAt": 1794193173390,
+        "statusUntil": null
+      },
+      {
+        "id": 124,
+        "name": "CilantroCore",
+        "level": 8,
+        "status": "ok",
+        "travel": null,
+        "faction": {
+          "id": 2,
+          "name": "Zero Tolerance",
+          "tag": "ZERO"
+        },
+        "lastActionAt": 1794785954926,
+        "createdAt": 1794347024842,
+        "role": "Member",
+        "isLeader": false,
+        "joinedAt": 1794193175558,
+        "statusUntil": null
+      },
+      {
+        "id": 125,
+        "name": "Xerox",
+        "level": 8,
+        "status": "ok",
+        "travel": null,
+        "faction": {
+          "id": 2,
+          "name": "Zero Tolerance",
+          "tag": "ZERO"
+        },
+        "lastActionAt": 1794804927303,
+        "createdAt": 1794404469049,
+        "role": "Member",
+        "isLeader": false,
+        "joinedAt": 1794193177549,
+        "statusUntil": null
+      },
+      {
+        "id": 138,
+        "name": "MorganCarter",
+        "level": 8,
+        "status": "ok",
+        "travel": null,
+        "faction": {
+          "id": 2,
+          "name": "Zero Tolerance",
+          "tag": "ZERO"
+        },
+        "lastActionAt": 1794808813447,
+        "createdAt": 1794426849779,
+        "role": "Member",
+        "isLeader": false,
+        "joinedAt": 1794429900909,
+        "statusUntil": null
+      },
+      {
+        "id": 152,
+        "name": "EXP",
+        "level": 8,
+        "status": "flying",
+        "travel": {
+          "dest": "kestrel",
+          "name": "Kestrel Isles",
+          "dir": "home",
+          "landsAt": 1794813495825
+        },
+        "faction": {
+          "id": 2,
+          "name": "Zero Tolerance",
+          "tag": "ZERO"
+        },
+        "lastActionAt": 1794811215825,
+        "createdAt": 1794451315175,
+        "role": "Member",
+        "isLeader": false,
+        "joinedAt": 1794363832433,
+        "statusUntil": null
+      },
+      {
+        "id": 117,
+        "name": "eve_laura_nana",
+        "level": 7,
+        "status": "ok",
+        "travel": null,
+        "faction": {
+          "id": 2,
+          "name": "Zero Tolerance",
+          "tag": "ZERO"
+        },
+        "lastActionAt": 1794740970847,
+        "createdAt": 1794230039743,
+        "role": "Member",
+        "isLeader": false,
+        "joinedAt": 1794239313888,
+        "statusUntil": null
+      },
+      {
+        "id": 119,
+        "name": "marielle03",
+        "level": 7,
+        "status": "ok",
+        "travel": null,
+        "faction": {
+          "id": 2,
+          "name": "Zero Tolerance",
+          "tag": "ZERO"
+        },
+        "lastActionAt": 1794761225752,
+        "createdAt": 1794238728107,
+        "role": "Member",
+        "isLeader": false,
+        "joinedAt": 1794238821215,
+        "statusUntil": null
+      },
+      {
+        "id": 159,
+        "name": "Herlims",
+        "level": 7,
+        "status": "ok",
+        "travel": null,
+        "faction": {
+          "id": 2,
+          "name": "Zero Tolerance",
+          "tag": "ZERO"
+        },
+        "lastActionAt": 1794809521288,
+        "createdAt": 1794604650456,
+        "role": "Member",
+        "isLeader": false,
+        "joinedAt": 1794363834326,
+        "statusUntil": null
+      },
+      {
+        "id": 111,
+        "name": "Dragonrider86",
+        "level": 5,
+        "status": "ok",
+        "travel": null,
+        "faction": {
+          "id": 2,
+          "name": "Zero Tolerance",
+          "tag": "ZERO"
+        },
+        "lastActionAt": 1794751693352,
+        "createdAt": 1794108484035,
+        "role": "Member",
+        "isLeader": false,
+        "joinedAt": 1794111919808,
+        "statusUntil": null
+      },
+      {
+        "id": 114,
+        "name": "DeathWeaver",
+        "level": 5,
+        "status": "ok",
+        "travel": null,
+        "faction": {
+          "id": 2,
+          "name": "Zero Tolerance",
+          "tag": "ZERO"
+        },
+        "lastActionAt": 1794769505563,
+        "createdAt": 1794143366439,
+        "role": "Member",
+        "isLeader": false,
+        "joinedAt": 1794146742793,
+        "statusUntil": null
+      },
+      {
+        "id": 115,
+        "name": "Wit_The_Slut",
+        "level": 5,
+        "status": "ok",
+        "travel": null,
+        "faction": {
+          "id": 2,
+          "name": "Zero Tolerance",
+          "tag": "ZERO"
+        },
+        "lastActionAt": 1794530839244,
+        "createdAt": 1794148223698,
+        "role": "Member",
+        "isLeader": false,
+        "joinedAt": 1794148308345,
+        "statusUntil": null
+      },
+      {
+        "id": 130,
+        "name": "Nimue",
+        "level": 5,
+        "status": "ok",
+        "travel": null,
+        "faction": {
+          "id": 2,
+          "name": "Zero Tolerance",
+          "tag": "ZERO"
+        },
+        "lastActionAt": 1794424258259,
+        "createdAt": 1794408261630,
+        "role": "Member",
+        "isLeader": false,
+        "joinedAt": 1794410242677,
+        "statusUntil": null
+      },
+      {
+        "id": 156,
+        "name": "Sound",
+        "level": 3,
+        "status": "ok",
+        "travel": null,
+        "faction": {
+          "id": 2,
+          "name": "Zero Tolerance",
+          "tag": "ZERO"
+        },
+        "lastActionAt": 1794777064137,
+        "createdAt": 1794496606989,
+        "role": "Member",
+        "isLeader": false,
+        "joinedAt": 1794429895366,
+        "statusUntil": null
+      },
+      {
+        "id": 133,
+        "name": "Zack0309",
+        "level": 2,
+        "status": "ok",
+        "travel": null,
+        "faction": {
+          "id": 2,
+          "name": "Zero Tolerance",
+          "tag": "ZERO"
+        },
+        "lastActionAt": 1794510667600,
+        "createdAt": 1794415734261,
+        "role": "Member",
+        "isLeader": false,
+        "joinedAt": 1794193179234,
+        "statusUntil": null
+      }
+    ]
+  }
+}
