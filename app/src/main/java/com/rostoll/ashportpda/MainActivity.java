@@ -80,6 +80,8 @@ public class MainActivity extends Activity {
     private LinearLayout browserView;
 
     private TextView topTitleBox;
+    private TextView quickBookmark1;
+    private TextView quickBookmark2;
     private LinearLayout findBar;
     private EditText findInput;
     private FrameLayout webViewStack;
@@ -133,7 +135,7 @@ public class MainActivity extends Activity {
         showBrowser();
 
         startOnboardingFlow();
-        autoUpdater.checkForUpdates(false);
+        autoUpdater.checkForUpdatesIfDue();
     }
 
     private void startOnboardingFlow() {
@@ -439,7 +441,12 @@ public class MainActivity extends Activity {
             BrowserTab active = getActiveTab();
             if (active != null) active.webView.reload();
         });
+        quickBookmark1 = makeQuickBookmarkButton(1);
+        quickBookmark2 = makeQuickBookmarkButton(2);
+        topBar.addView(quickBookmark1);
+        topBar.addView(quickBookmark2);
         topBar.addView(reloadBtn);
+        refreshQuickBookmarksUI();
         root.addView(topBar);
 
         findBar = new LinearLayout(this);
@@ -1046,6 +1053,7 @@ public class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         updateLinkStatusCardUI(isAshportLinkHandlingEnabled());
+        if (autoUpdater != null) autoUpdater.checkForUpdatesIfDue();
         if (hubView != null && hubView.getVisibility() == View.VISIBLE) {
             apiTimerManager.startTicker();
         }
@@ -1093,6 +1101,104 @@ public class MainActivity extends Activity {
             }
         } catch (Exception ignored) {}
         return sb.toString();
+    }
+
+    private TextView makeQuickBookmarkButton(final int slot) {
+        TextView btn = new TextView(this);
+        btn.setTextSize(17f);
+        btn.setGravity(Gravity.CENTER);
+        btn.setLayoutParams(new LinearLayout.LayoutParams(dp(36), dp(38)));
+        btn.setOnClickListener(v -> {
+            SharedPreferences prefs = getSharedPreferences("AshportPDA_AppPrefs", Context.MODE_PRIVATE);
+            String savedUrl = prefs.getString("qb_" + slot + "_url", "");
+            if (savedUrl.isEmpty()) {
+                Toast.makeText(this, "Long-press to save current page to Bookmark " + slot, Toast.LENGTH_SHORT).show();
+            } else {
+                BrowserTab active = getActiveTab();
+                if (active != null) active.webView.loadUrl(savedUrl);
+            }
+        });
+        btn.setOnLongClickListener(v -> {
+            showQuickBookmarkDialog(slot);
+            return true;
+        });
+        return btn;
+    }
+
+    private void refreshQuickBookmarksUI() {
+        SharedPreferences prefs = getSharedPreferences("AshportPDA_AppPrefs", Context.MODE_PRIVATE);
+        TextView[] btns = {quickBookmark1, quickBookmark2};
+        for (int i = 0; i < btns.length; i++) {
+            if (btns[i] == null) continue;
+            int slot = i + 1;
+            String url = prefs.getString("qb_" + slot + "_url", "");
+            String icon = prefs.getString("qb_" + slot + "_icon", "");
+            if (url.isEmpty()) {
+                btns[i].setText("☆");
+                btns[i].setTextColor(Color.parseColor("#607d8b"));
+            } else {
+                btns[i].setText(icon.isEmpty() ? "★" : icon);
+                btns[i].setTextColor(Color.parseColor("#f2851d"));
+            }
+        }
+    }
+
+    private void showQuickBookmarkDialog(final int slot) {
+        BrowserTab active = getActiveTab();
+        final String currentUrl = (active != null && active.webView.getUrl() != null)
+                ? active.webView.getUrl() : DEFAULT_URL;
+        final String currentTitle = active != null ? active.title : "Ashport";
+
+        SharedPreferences prefs = getSharedPreferences("AshportPDA_AppPrefs", Context.MODE_PRIVATE);
+        String existingIcon = prefs.getString("qb_" + slot + "_icon", "");
+        String existingUrl = prefs.getString("qb_" + slot + "_url", "");
+
+        LinearLayout layout = new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        int pad = dp(18);
+        layout.setPadding(pad, pad, pad, pad);
+
+        TextView info = new TextView(this);
+        info.setText("Save current page to Slot " + slot + ":\n" + currentTitle + "\n" + currentUrl);
+        info.setTextColor(Color.parseColor("#b0bec5"));
+        info.setTextSize(12f);
+        info.setPadding(0, 0, 0, dp(10));
+        layout.addView(info);
+
+        EditText iconInput = new EditText(this);
+        iconInput.setHint("Icon or emoji (e.g. ✈️, 🏋️, 🏦)");
+        iconInput.setText(existingIcon.isEmpty() ? "★" : existingIcon);
+        iconInput.setTextColor(Color.WHITE);
+        iconInput.setHintTextColor(Color.GRAY);
+        iconInput.setSingleLine(true);
+        layout.addView(iconInput);
+
+        AlertDialog.Builder builder = new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                .setTitle("Quick Bookmark " + slot)
+                .setView(layout)
+                .setPositiveButton("Save Page", (d, w) -> {
+                    String icon = iconInput.getText().toString().trim();
+                    if (icon.isEmpty()) icon = "★";
+                    prefs.edit()
+                            .putString("qb_" + slot + "_url", currentUrl)
+                            .putString("qb_" + slot + "_icon", icon)
+                            .apply();
+                    refreshQuickBookmarksUI();
+                    Toast.makeText(this, "Saved to Bookmark " + slot, Toast.LENGTH_SHORT).show();
+                })
+                .setNegativeButton("Cancel", null);
+
+        if (!existingUrl.isEmpty()) {
+            builder.setNeutralButton("Clear Slot", (d, w) -> {
+                prefs.edit()
+                        .remove("qb_" + slot + "_url")
+                        .remove("qb_" + slot + "_icon")
+                        .apply();
+                refreshQuickBookmarksUI();
+                Toast.makeText(this, "Bookmark " + slot + " cleared", Toast.LENGTH_SHORT).show();
+            });
+        }
+        builder.show();
     }
 
     private int dp(int val) {

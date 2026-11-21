@@ -2,7 +2,9 @@ package com.rostoll.ashportpda;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageInfo;
 import android.content.res.ColorStateList;
 import android.graphics.Color;
@@ -35,6 +37,10 @@ public class AutoUpdater {
     public static final String GITHUB_REPO = "rostoll-dev/AshportPass";
     private static final String LATEST_RELEASE_API = "https://api.github.com/repos/" + GITHUB_REPO + "/releases/latest";
 
+    private static final String PREFS_NAME = "AshportPDA_AppPrefs";
+    private static final String KEY_LAST_CHECK = "last_update_check_ms";
+    private static final long CHECK_INTERVAL_MS = 12L * 60L * 60L * 1000L;
+
     private final Activity activity;
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
 
@@ -48,6 +54,14 @@ public class AutoUpdater {
             return pInfo.versionName != null ? pInfo.versionName : "1.0.0";
         } catch (Exception e) {
             return "1.0.0";
+        }
+    }
+
+    public void checkForUpdatesIfDue() {
+        SharedPreferences prefs = activity.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+        long lastCheck = prefs.getLong(KEY_LAST_CHECK, 0L);
+        if (System.currentTimeMillis() - lastCheck >= CHECK_INTERVAL_MS) {
+            checkForUpdates(false);
         }
     }
 
@@ -81,6 +95,9 @@ public class AutoUpdater {
                     String line;
                     while ((line = br.readLine()) != null) sb.append(line).append("\n");
                 }
+
+                activity.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                        .edit().putLong(KEY_LAST_CHECK, System.currentTimeMillis()).apply();
 
                 JSONObject release = new JSONObject(sb.toString());
                 String tagName = release.optString("tag_name", "").replaceFirst("^[vV]", "").trim();
