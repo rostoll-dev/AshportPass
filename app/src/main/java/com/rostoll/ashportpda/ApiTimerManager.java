@@ -75,7 +75,7 @@ public class ApiTimerManager {
             {"106", "notify_booster", "live_booster", "false", "🚀 Booster Cooldown"},
             {"107", "notify_medical", "live_medical", "false", "🩹 Medical Cooldown"},
             {"101", "notify_energy",  "live_energy",  "false", "⚡ Energy Bar"},
-            {"102", "notify_nerve",   "live_nerve",   "false", "🔥 Nerve Bar"},
+            {"102", "notify_nerve",   "live_nerve",   "false", "🔥 Grit Bar"},
             {"103", "notify_health",  "live_health",  "false", "❤️ Health Bar"},
             {"104", "notify_mood",    "live_mood",    "false", "😊 Mood Bar"},
             {"110", "notify_course",  "live_course",  "true",  "🎓 Education Course"},
@@ -691,7 +691,7 @@ public class ApiTimerManager {
             barsCard.setLayoutParams(lp);
 
             addBarRow(barsCard, "⚡ Energy", bars.optJSONObject("energy"), nowMs, "#69f0ae");
-            addBarRow(barsCard, "🔥 Nerve", bars.optJSONObject("nerve"), nowMs, "#ff8a65");
+            addBarRow(barsCard, "🔥 Grit", (bars.optJSONObject("grit") != null ? bars.optJSONObject("grit") : bars.optJSONObject("nerve")), nowMs, "#ff8a65");
             addBarRow(barsCard, "❤️ Health", bars.optJSONObject("health"), nowMs, "#ef5350");
             addBarRow(barsCard, "😊 Mood", bars.optJSONObject("mood"), nowMs, "#64b5f6");
 
@@ -725,9 +725,9 @@ public class ApiTimerManager {
         JSONObject refills = lastTimersJson.optJSONObject("refills");
         if (refills != null) {
             boolean eRefill = refills.optBoolean("energy", false);
-            boolean nRefill = refills.optBoolean("nerve", false);
+            boolean nRefill = refills.optBoolean("grit", refills.optBoolean("nerve", false));
             String refillText = (eRefill ? "⚡ Energy Available  " : "⚡ Used  ") +
-                    (nRefill ? "🔥 Nerve Available" : "🔥 Used");
+                    (nRefill ? "🔥 Grit Available" : "🔥 Used");
             timersCard.addView(makeRowText("🔋 Daily Refills", refillText, (eRefill || nRefill) ? "#ffd54f" : "#78909c"));
         }
 
@@ -847,13 +847,13 @@ public class ApiTimerManager {
                     "⚡ Energy Full", "Your Ashport Energy bar has reached maximum capacity!",
                     "Regenerating Energy", eVal + " / " + eMax + " Energy", "#69f0ae");
 
-            JSONObject nBar = bars.optJSONObject("nerve");
+            JSONObject nBar = (bars.optJSONObject("grit") != null ? bars.optJSONObject("grit") : bars.optJSONObject("nerve"));
             int nVal = nBar != null ? nBar.optInt("value", 0) : 0;
             int nMax = nBar != null ? nBar.optInt("max", 100) : 100;
             anyLiveActive |= handleTimerEntryStatic(context, prefs, 102, "notify_nerve", "live_nerve", false,
                     nBar != null ? nBar.optLong("fullAt", 0L) : 0L, 0L, nowServer,
-                    "🔥 Nerve Full", "Your Ashport Nerve bar is full and ready for crimes!",
-                    "Regenerating Nerve", nVal + " / " + nMax + " Nerve", "#ff8a65");
+                    "🔥 Grit Full", "Your Ashport Grit bar is full and ready for crimes!",
+                    "Regenerating Grit", nVal + " / " + nMax + " Grit", "#ff8a65");
 
             JSONObject hBar = bars.optJSONObject("health");
             int hVal = hBar != null ? hBar.optInt("value", 0) : 0;
