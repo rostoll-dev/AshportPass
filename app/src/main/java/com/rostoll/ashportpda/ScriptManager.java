@@ -52,6 +52,9 @@ public class ScriptManager {
 
     private final Activity activity;
     private final SharedPreferences prefs;
+    private static final String KEY_LAST_UPDATE_CHECK = "last_script_update_check_ms";
+    private static final long UPDATE_CHECK_INTERVAL_MS = 12L * 60L * 60L * 1000L;
+
     private final OnScriptsChangedListener listener;
 
     public ScriptManager(Activity activity, OnScriptsChangedListener listener) {
@@ -216,6 +219,7 @@ public class ScriptManager {
 
         refreshListUI(listContainer);
         dialog.show();
+        checkForScriptUpdates(false, () -> refreshListUI(listContainer));
     }
 
     private void refreshListUI(LinearLayout container) {
@@ -263,7 +267,9 @@ public class ScriptManager {
             card.addView(topRow);
 
             TextView metaTv = new TextView(activity);
-            metaTv.setText("@run-at " + script.runAt + (script.description.isEmpty() ? "" : " • " + script.description));
+            String ver = extractMeta(script.code, "version", "");
+            String verTag = ver.isEmpty() ? "" : "v" + ver + " • ";
+            metaTv.setText(verTag + "@run-at " + script.runAt + (script.description.isEmpty() ? "" : " • " + script.description));
             metaTv.setTextColor(Color.parseColor("#90a4ae"));
             metaTv.setTextSize(12f);
             metaTv.setPadding(0, dp(4), 0, dp(10));
@@ -435,6 +441,100 @@ public class ScriptManager {
         b.setBackground(bg);
         b.setPadding(dp(12), 0, dp(12), 0);
         return b;
+    }
+
+    public void checkForScriptUpdatesIfDue() {
+        long lastCheck = prefs.getLong(KEY_LAST_UPDATE_CHECK, 0L);
+        if (System.currentTimeMillis() - lastCheck >= UPDATE_CHECK_INTERVAL_MS) {
+            checkForScriptUpdates(false, null);
+        }
+    }
+
+    public void checkForScriptUpdates(boolean showNoUpdateToast, Runnable onUpdated) {
+        Executors.newSingleThreadExecutor().execute(() -> {
+            try {
+                JSONArray arr = getScriptsJson();
+                int updatedCount = 0;
+
+                for (int i = 0; i < arr.length(); i++) {
+                    JSONObject o = arr.optJSONObject(i);
+                    if (o == null) continue;
+
+                    String localCode = o.optString("code", "");
+                    String localVer = extractMeta(localCode, "version", "");
+                    String updateUrl = extractMeta(localCode, "updateURL", "");
+                    String downloadUrl = extractMeta(localCode, "downloadURL", "");
+
+                    if (updateUrl.isEmpty() && downloadUrl.isEmpty()) continue;
+                    String checkUrl = !updateUrl.isEmpty() ? updateUrl : downloadUrl;
+                    String fetchUrl = !downloadUrl.isEmpty() ? downloadUrl : updateUrl;
+
+                    String metaText = httpGetText(checkUrl);
+                    if (metaText == null || !metaText.contains("==UserScript==")) continue;
+
+                    String remoteVer = extractMeta(metaText, "version", "");
+                    if (remoteVer.isEmpty() || !isNewerVersion(remoteVer, localVer)) continue;
+
+                    String newCode = checkUrl.equals(fetchUrl) ? metaText : httpGetText(fetchUrl);
+                    if (newCode == null || !newCode.contains("==UserScript==")) continue;
+
+                    String id = o.optString("id", UUID.randomUUID().toString());
+                    String name = o.optString("name", "Script");
+                    boolean enabled = o.optBoolean("enabled", true);
+                    arr.put(i, createScriptJson(id, name, newCode, enabled));
+                    updatedCount++;
+                }
+
+                prefs.edit().putLong(KEY_LAST_UPDATE_CHECK, System.currentTimeMillis()).apply();
+
+                final int finalUpdated = updatedCount;
+                final JSONArray finalArr = arr;
+                activity.runOnUiThread(() -> {
+                    if (finalUpdated > 0) {
+                        saveScriptsJson(finalArr);
+                        if (onUpdated != null) onUpdated.run();
+                        String msg = finalUpdated == 1
+                                ? "1 userscript updated (reload page to apply)"
+                                : finalUpdated + " userscripts updated (reload page to apply)";
+                        Toast.makeText(activity, msg, Toast.LENGTH_LONG).show();
+                    } else if (showNoUpdateToast) {
+                        Toast.makeText(activity, "All userscripts are up to date", Toast.LENGTH_SHORT).show();
+                    }
+                });
+            } catch (Exception ignored) {}
+        });
+    }
+
+    private String httpGetText(String urlStr) {
+        try {
+            HttpURLConnection conn = (HttpURLConnection) new URL(urlStr).openConnection();
+            conn.setConnectTimeout(10000);
+            conn.setReadTimeout(10000);
+            conn.setInstanceFollowRedirects(true);
+            if (conn.getResponseCode() != 200) return null;
+            StringBuilder sb = new StringBuilder();
+            try (BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = br.readLine()) != null) sb.append(line).append("\n");
+            }
+            return sb.toString();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private boolean isNewerVersion(String remote, String local) {
+        if (local == null || local.isEmpty()) return true;
+        String[] rParts = remote.replaceAll("[^0-9.]", "").split("\\.");
+        String[] lParts = local.replaceAll("[^0-9.]", "").split("\\.");
+        int len = Math.max(rParts.length, lParts.length);
+        for (int i = 0; i < len; i++) {
+            int r = (i < rParts.length && !rParts[i].isEmpty()) ? Integer.parseInt(rParts[i]) : 0;
+            int l = (i < lParts.length && !lParts[i].isEmpty()) ? Integer.parseInt(lParts[i]) : 0;
+            if (r > l) return true;
+            if (r < l) return false;
+        }
+        return false;
     }
 
     private int dp(int val) {

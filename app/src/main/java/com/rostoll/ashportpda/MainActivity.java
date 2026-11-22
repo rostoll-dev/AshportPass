@@ -136,6 +136,7 @@ public class MainActivity extends Activity {
 
         startOnboardingFlow();
         autoUpdater.checkForUpdatesIfDue();
+        if (scriptManager != null) scriptManager.checkForScriptUpdatesIfDue();
     }
 
     private void startOnboardingFlow() {
@@ -1054,6 +1055,7 @@ public class MainActivity extends Activity {
         super.onResume();
         updateLinkStatusCardUI(isAshportLinkHandlingEnabled());
         if (autoUpdater != null) autoUpdater.checkForUpdatesIfDue();
+        if (scriptManager != null) scriptManager.checkForScriptUpdatesIfDue();
         if (hubView != null && hubView.getVisibility() == View.VISIBLE) {
             apiTimerManager.startTicker();
         }
