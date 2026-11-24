@@ -970,12 +970,18 @@ public class MainActivity extends Activity {
             String regexStr = globToJsRegex(script.matchPattern);
             String matchGuard = "if (!(new RegExp(" + JSONObject.quote(regexStr) + ", 'i').test(window.location.href))) return;\n";
 
+            String safeName = JSONObject.quote(script.name != null ? script.name : "Userscript");
+            String catchBlock = "catch (e) { console.error('[AshportPass Script Error]', " + safeName + ", e); " +
+                    "try { if (window.AndroidGMBridge && window.AndroidGMBridge.showToast) { " +
+                    "window.AndroidGMBridge.showToast('⚠️ ' + " + safeName + " + ' failed: ' + (e && e.message ? e.message : e)); " +
+                    "} } catch (_) {} }";
+
             String wrapped;
             if (isDocStart) {
-                wrapped = "(function() {\n" + matchGuard + script.code + "\n})();";
+                wrapped = "(function() {\n" + matchGuard + "try {\n" + script.code + "\n} " + catchBlock + "\n})();";
             } else {
                 wrapped = "(function() {\n" + matchGuard +
-                        "  function __run() {\n" + script.code + "\n  }\n" +
+                        "  function __run() { try {\n" + script.code + "\n  } " + catchBlock + " }\n" +
                         "  if (document.readyState === 'loading') {\n" +
                         "    document.addEventListener('DOMContentLoaded', __run, { once: true });\n" +
                         "  } else {\n" +

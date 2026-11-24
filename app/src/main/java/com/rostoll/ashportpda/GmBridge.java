@@ -66,6 +66,15 @@ public class GmBridge {
     }
 
     @JavascriptInterface
+    public void showToast(final String message) {
+        webView.post(() -> android.widget.Toast.makeText(
+                webView.getContext(),
+                message,
+                android.widget.Toast.LENGTH_LONG
+        ).show());
+    }
+
+    @JavascriptInterface
     public void xmlHttpRequest(final String requestId, final String method, final String urlStr,
                                final String headersJson, final String bodyData) {
         executor.execute(() -> {

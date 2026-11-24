@@ -16,7 +16,7 @@ android {
         applicationId "com.rostoll.ashportpda"
         minSdk 26
         targetSdk 34
-        versionCode 21
+        versionCode 23
         versionName "1.3.2"
     }
 
