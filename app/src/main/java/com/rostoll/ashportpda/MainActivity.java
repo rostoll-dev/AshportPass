@@ -773,7 +773,9 @@ public class MainActivity extends Activity {
         s.setDisplayZoomControls(false);
         s.setMixedContentMode(WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE);
 
-        wv.addJavascriptInterface(new GmBridge(this, wv), "AndroidGMBridge");
+        GmBridge gmBridge = new GmBridge(this, wv);
+        wv.addJavascriptInterface(gmBridge, "AndroidGMBridge");
+        wv.addJavascriptInterface(gmBridge, "AshportPass");
         attachScriptsToTab(tab);
 
         wv.setWebChromeClient(new WebChromeClient() {

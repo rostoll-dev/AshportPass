@@ -212,6 +212,17 @@ public class ScriptManager {
         actions.addView(addUrlBtn);
         root.addView(actions);
 
+        Button checkUpdatesBtn = makeButton("🔄 Check for Script Updates", "#2b5468");
+        LinearLayout.LayoutParams updateLp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(38));
+        updateLp.setMargins(pad, 0, pad, dp(8));
+        checkUpdatesBtn.setLayoutParams(updateLp);
+        checkUpdatesBtn.setOnClickListener(v -> {
+            Toast.makeText(activity, "Checking for script updates...", Toast.LENGTH_SHORT).show();
+            checkForScriptUpdates(true, () -> refreshListUI(listContainer));
+        });
+        root.addView(checkUpdatesBtn);
+
         ScrollView scroll = new ScrollView(activity);
         scroll.addView(listContainer);
         root.addView(scroll, new LinearLayout.LayoutParams(

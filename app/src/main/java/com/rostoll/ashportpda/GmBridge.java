@@ -26,10 +26,17 @@ public class GmBridge {
     private final SharedPreferences prefs;
     private final WebView webView;
     private final ExecutorService executor = Executors.newCachedThreadPool();
+    private final SecureKeyStore secureKeyStore;
 
     public GmBridge(Context context, WebView webView) {
         this.prefs = context.getSharedPreferences("AshportPDA_GMStorage", Context.MODE_PRIVATE);
         this.webView = webView;
+        this.secureKeyStore = new SecureKeyStore(context);
+    }
+
+    @JavascriptInterface
+    public String getApiKey() {
+        return secureKeyStore.getApiKey();
     }
 
     @JavascriptInterface
